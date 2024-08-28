@@ -16,6 +16,8 @@ define( 'LDTT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 
 // Include the main class loader.
 require_once LDTT_PLUGIN_DIR . 'includes/class-ldtt-loader.php';
+require_once LDTT_PLUGIN_DIR . 'includes/class-ldtt-activator.php';
+require_once LDTT_PLUGIN_DIR . 'includes/class-ldtt-deactivator.php';
 
 function ldtt_enqueue_admin_assets() {
     // Enqueue the CSS file
