@@ -20,6 +20,31 @@ if ( ! class_exists( 'LDTT_Create_Quizzes' ) ) {
     class LDTT_Create_Quizzes {
 
         /**
+         * Handle the WP-CLI command for creating a quiz.
+         *
+         * @param array $args The positional arguments from WP-CLI.
+         * @param array $assoc_args The associative arguments from WP-CLI.
+         *
+         * @return void
+         */
+        public function handle( $args, $assoc_args ) {
+            $quiz_title = isset( $assoc_args['title'] ) ? $assoc_args['title'] : 'Untitled Quiz';
+            $questions_count = isset( $assoc_args['questions'] ) ? (int) $assoc_args['questions'] : 10;
+
+            // Generate dummy questions if necessary.
+            $questions = $this->generate_dummy_questions( $questions_count );
+
+            // Create the quiz.
+            $quiz_id = $this->create_quiz( $quiz_title, array(), $questions );
+
+            if ( is_wp_error( $quiz_id ) ) {
+                WP_CLI::error( $quiz_id->get_error_message() );
+            } else {
+                WP_CLI::success( "Quiz created with ID: $quiz_id" );
+            }
+        }
+
+        /**
          * Create a quiz and optionally create and associate questions.
          *
          * @param string $quiz_title The title of the quiz.
@@ -80,7 +105,7 @@ if ( ! class_exists( 'LDTT_Create_Quizzes' ) ) {
                 'post_type'      => 'lesson',
                 'posts_per_page' => -1, // Fetch all lessons.
                 'post_status'    => 'publish',
-                'fields'         => 'ids',
+                'fields'         = 'ids',
             );
 
             $lessons = get_posts( $args );
@@ -236,11 +261,14 @@ if ( ! class_exists( 'LDTT_Create_Quizzes' ) ) {
         
             // Randomly pick questions from predefined ones.
             $total_questions = count( $predefined_questions );
-            for ( $i = 0; $i < $count; $i++ ) {
-                $dummy_questions[] = $predefined_questions[ $i % $total_questions ];
-            }
-        
+            for ( $i = 0; $i < $count; $dummy_questions[] = $predefined_questions[ $i % $total_questions ], $i++ );
+
             return $dummy_questions;
         }
+    }
+
+    // Register the CLI command.
+    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+        WP_CLI::add_command( 'ldtt create_quizzes', array( 'LDTT_Create_Quizzes', 'handle' ) );
     }
 }

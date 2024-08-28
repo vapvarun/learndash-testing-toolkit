@@ -51,7 +51,7 @@ class LDTT_Create_Courses {
         return false; // No admin user found
     }
 
-    private static function create_courses( $course_prefix, $course_count, $specified_access_mode = null, $admin_user_id, &$global_counter ) {
+    private static function create_courses( $course_prefix, $course_count, $admin_user_id, &$global_counter, $specified_access_mode = null ) {
         $course_ids = array();
     
         $access_modes = array(
@@ -124,7 +124,7 @@ class LDTT_Create_Courses {
         }
     
         return $course_ids;
-    }
+    }    
     
     private static function generate_random_course_name( $titles, $prefix, $counter ) {
         $random_title = $titles[ array_rand( $titles ) ];

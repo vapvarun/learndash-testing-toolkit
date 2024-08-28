@@ -67,26 +67,29 @@ wp ldtt create-topics [--count=<number>] [--lesson_id=<id>] [--author_id=<id>]
 
 ### Create Quizzes
 
-Create quizzes under a specified lesson or topic.
+You can create a quiz and automatically associate questions with it using the following command:
 
 ```bash
-wp ldtt create-quizzes --lesson="Sample Lesson" --quizzes=3
+wp ldtt create_quiz --title="Physics Quiz" --questions=10
 ```
 
-- **lesson**: The name of the lesson to create quizzes under. (optional if topic is specified)
-- **topic**: The name of the topic to create quizzes under. (optional if lesson is specified)
-- **quizzes**: The number of quizzes to create. Default is 1.
+- `--title` : The title of the quiz.
+- `--questions` : The number of questions to create and associate with the quiz.
+
+This command will create a new quiz titled "Physics Quiz" and associate it with a lesson that does not already have a quiz. If fewer than 5 questions are specified, the command will generate the remaining questions automatically using dummy questions related to physics and computer science.
 
 ### Create Questions
 
-Create questions under a specified quiz.
+If you need to create standalone questions and associate them with an existing quiz, use the following command:
 
 ```bash
-wp ldtt create-questions --quiz="Sample Quiz" --questions=5
+wp ldtt create_questions --quiz_id=123 --questions=5
 ```
 
-- **quiz**: The name of the quiz to create questions under.
-- **questions**: The number of questions to create. Default is 5.
+- `--quiz_id` : The ID of the quiz to associate the questions with.
+- `--questions` : The number of questions to create.
+
+This command will create 5 questions and associate them with the quiz identified by the given quiz ID.
 
 ### Enroll Users
 
