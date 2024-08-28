@@ -110,6 +110,47 @@ wp ldtt enroll-users --group="Sample Group" --users=10
 - **group**: The name of the group to enroll users in.
 - **users**: The number of users to enroll. Default is 5.
 
+### Delete Courses, Lessons, or Topics
+
+This command allows you to delete courses, lessons, and topics created by the toolkit or any LearnDash items.
+
+**Command:**
+
+```bash
+wp ldtt delete-items [--courses] [--lessons] [--topics]
+```
+
+**Parameters:**
+
+- `--courses` (optional): Deletes all LearnDash courses.
+- `--lessons` (optional): Deletes all LearnDash lessons.
+- `--topics` (optional): Deletes all LearnDash topics.
+
+**Examples:**
+
+- Delete only courses:
+
+  ```bash
+  wp ldtt delete-items --courses
+  ```
+
+- Delete only lessons:
+
+  ```bash
+  wp ldtt delete-items --lessons
+  ```
+
+- Delete only topics:
+
+  ```bash
+  wp ldtt delete-items --topics
+  ```
+
+- Delete courses, lessons, and topics all at once:
+  ```bash
+  wp ldtt delete-items --courses --lessons --topics
+  ```
+
 ## Contributing
 
 If you would like to contribute to this plugin, please fork the repository and submit a pull request. Your contributions are greatly appreciated.

@@ -32,6 +32,7 @@ class LDTT_Loader {
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-course-groups.php';
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-group-leaders.php';
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-group-enrollment.php';
+        require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-delete-items.php';
     }
 
     /**
@@ -44,6 +45,7 @@ class LDTT_Loader {
             'Create_Topics',
             'Create_Quizzes',
             'Create_Questions',
+            'Delete_Items',
             'Enrollment',
             'Course_Groups',
             'Group_Leaders',
