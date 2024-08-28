@@ -1,0 +1,7 @@
+/* Example CSS to style admin interface elements */
+.ldtt-custom-box {
+    background-color: #f9f9f9;
+    padding: 20px;
+    border: 1px solid #ddd;
+    margin-bottom: 20px;
+}
