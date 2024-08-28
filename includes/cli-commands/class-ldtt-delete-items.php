@@ -7,6 +7,7 @@ class LDTT_Delete_Items {
         $delete_courses = isset( $assoc_args['courses'] );
         $delete_lessons = isset( $assoc_args['lessons'] );
         $delete_topics = isset( $assoc_args['topics'] );
+        $permanent_delete = isset( $assoc_args['permanent'] );
 
         if ( ! $delete_courses && ! $delete_lessons && ! $delete_topics ) {
             LDTT_Helper::cli_error( "Please specify at least one type of item to delete: --courses, --lessons, --topics" );
@@ -15,21 +16,21 @@ class LDTT_Delete_Items {
 
         // Delete courses
         if ( $delete_courses ) {
-            self::delete_items( 'sfwd-courses', 'Course' );
+            self::delete_items( 'sfwd-courses', 'Course', $permanent_delete );
         }
 
         // Delete lessons
         if ( $delete_lessons ) {
-            self::delete_items( 'sfwd-lessons', 'Lesson' );
+            self::delete_items( 'sfwd-lessons', 'Lesson', $permanent_delete );
         }
 
         // Delete topics
         if ( $delete_topics ) {
-            self::delete_items( 'sfwd-topic', 'Topic' );
+            self::delete_items( 'sfwd-topic', 'Topic', $permanent_delete );
         }
     }
 
-    private static function delete_items( $post_type, $item_name ) {
+    private static function delete_items( $post_type, $item_name, $permanent_delete ) {
         $items = get_posts( array(
             'post_type'   => $post_type,
             'numberposts' => -1,
@@ -43,7 +44,7 @@ class LDTT_Delete_Items {
         }
 
         foreach ( $items as $item_id ) {
-            wp_delete_post( $item_id, true );
+            wp_delete_post( $item_id, $permanent_delete );
             LDTT_Helper::cli_success( "Deleted {$item_name} ID {$item_id}." );
         }
 

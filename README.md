@@ -150,6 +150,10 @@ wp ldtt delete-items [--courses] [--lessons] [--topics]
   ```bash
   wp ldtt delete-items --courses --lessons --topics
   ```
+- Permanently delete courses, lessons, and topics all at once:
+  ```bash
+  wp ldtt delete-items --courses --lessons --topics --permanent
+  ```
 
 ## Contributing
 
