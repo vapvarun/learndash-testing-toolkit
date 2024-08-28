@@ -20,37 +20,50 @@ The LearnDash Testing Toolkit is a powerful WordPress CLI plugin designed to str
 
 ### Create Courses
 
-Create courses with a specified prefix, access mode, and count.
+Create multiple LearnDash courses with various access modes.
+
+**Command:**
 
 ```bash
-wp ldtt create-courses --prefix="My Course" --count=20 --access_mode=free
+wp ldtt create-courses [--count=<number>] [--access_mode=<mode>]
 ```
 
-- **prefix**: (optional) The prefix to be used for course titles.
-- **count**: (optional) The number of courses to create. Default is 20.
-- **access_mode**: (optional) The access mode for the courses. Options are `open`, `free`, `buy-now`, `recurring`, `closed`. If not specified, the command will cycle through all modes.
+**Parameters:**
+
+- `count` (optional): Number of courses to create. Default is 5.
+- `access_mode` (optional): Access mode for the courses. If not specified, courses will be created with a random access mode. Available modes: `open`, `free`, `paynow`, `subscribe`, `closed`.
 
 ### Create Lessons
 
-Create lessons under a specified course.
+Create multiple LearnDash lessons and assign them to available courses.
+
+**Command:**
 
 ```bash
-wp ldtt create-lessons --course="Sample Course" --lessons=5
+wp ldtt create-lessons [--count=<number>] [--course_id=<id>] [--author_id=<id>]
 ```
 
-- **course**: The name of the course to create lessons under.
-- **lessons**: The number of lessons to create. Default is 3.
+**Parameters:**
+
+- `count` (optional): Number of lessons to create. Default is 50.
+- `course_id` (optional): Course ID to assign lessons to. If not provided, lessons will be assigned to random courses.
+- `author_id` (optional): User ID to set as the author of the lessons. Defaults to an admin user.
 
 ### Create Topics
 
-Create topics under a specified lesson.
+Create multiple LearnDash topics and assign them to available lessons.
+
+**Command:**
 
 ```bash
-wp ldtt create-topics --lesson="Sample Lesson" --topics=5
+wp ldtt create-topics [--count=<number>] [--lesson_id=<id>] [--author_id=<id>]
 ```
 
-- **lesson**: The name of the lesson to create topics under.
-- **topics**: The number of topics to create. Default is 3.
+**Parameters:**
+
+- `count` (optional): Number of topics to create. Default is 50.
+- `lesson_id` (optional): Lesson ID to assign topics to. If not provided, topics will be assigned to random lessons.
+- `author_id` (optional): User ID to set as the author of the topics. Defaults to an admin user.
 
 ### Create Quizzes
 
