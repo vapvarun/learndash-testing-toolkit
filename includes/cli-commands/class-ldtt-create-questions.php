@@ -37,7 +37,7 @@ if ( ! class_exists( 'LDTT_Create_Questions' ) ) {
                 $question_args = array(
                     'post_title'  => wp_strip_all_tags( $question_title ),
                     'post_status' => 'publish',
-                    'post_type'   => 'question',
+                    'post_type'   => 'sfwd-question',
                     'meta_input'  => array(
                         'quiz_id' => $quiz_id,
                         'type'    => $question_type,
@@ -200,14 +200,14 @@ if ( ! class_exists( 'LDTT_Create_Questions' ) ) {
         }
 
         /**
-         * CLI Command to generate questions.
+         * CLI Command to handle question creation.
          *
          * @param array $args The CLI command arguments.
          * @param array $assoc_args The associative CLI arguments.
          *
          * @return void
          */
-        public function cli_create_questions( $args, $assoc_args ) {
+        public function handle( $args, $assoc_args ) {
             $quiz_id = isset( $assoc_args['quiz_id'] ) ? absint( $assoc_args['quiz_id'] ) : 0;
             $count   = isset( $assoc_args['count'] ) ? absint( $assoc_args['count'] ) : 5;
 
@@ -228,6 +228,6 @@ if ( ! class_exists( 'LDTT_Create_Questions' ) ) {
 
     // Register the CLI command.
     if ( defined( 'WP_CLI' ) && WP_CLI ) {
-        WP_CLI::add_command( 'ldtt create_questions', array( 'LDTT_Create_Questions', 'cli_create_questions' ) );
+        WP_CLI::add_command( 'ldtt create-questions', array( 'LDTT_Create_Questions', 'handle' ) );
     }
 }

@@ -62,7 +62,7 @@ if ( ! class_exists( 'LDTT_Create_Quizzes' ) ) {
             $quiz_args = array(
                 'post_title'  => wp_strip_all_tags( $quiz_title ),
                 'post_status' => 'publish',
-                'post_type'   => 'quiz',
+                'post_type'   => 'sfwd-quiz',
                 'meta_input'  => $quiz_data,
             );
 
@@ -105,26 +105,27 @@ if ( ! class_exists( 'LDTT_Create_Quizzes' ) ) {
                 'post_type'      => 'lesson',
                 'posts_per_page' => -1, // Fetch all lessons.
                 'post_status'    => 'publish',
-                'fields'         = 'ids',
+                'fields'         => 'ids', // Corrected the assignment operator here.
             );
-
+        
             $lessons = get_posts( $args );
-
+        
             if ( ! empty( $lessons ) && is_array( $lessons ) ) {
                 // Filter out lessons that already have quizzes associated with them.
                 $available_lessons = array_filter( $lessons, function( $lesson_id ) {
                     $quiz_id = get_post_meta( $lesson_id, 'quiz_id', true );
                     return empty( $quiz_id );
                 });
-
+        
                 if ( ! empty( $available_lessons ) ) {
                     // Randomize the selection.
                     return $available_lessons[ array_rand( $available_lessons ) ];
                 }
             }
-
+        
             return 0; // Return 0 if no available lessons are found.
         }
+        
 
         /**
          * Generate dummy questions to ensure a minimum of 5 questions per quiz.
