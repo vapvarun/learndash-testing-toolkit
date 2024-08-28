@@ -53,7 +53,7 @@ class LDTT_Create_Courses {
 
     private static function create_courses( $course_prefix, $course_count, $specified_access_mode = null, $admin_user_id, &$global_counter ) {
         $course_ids = array();
-
+    
         $access_modes = array(
             'open' => 'Open',
             'free' => 'Free',
@@ -61,15 +61,43 @@ class LDTT_Create_Courses {
             'recurring' => 'Recurring',
             'closed' => 'Closed'
         );
-
+    
+        $movie_titles = array(
+            "Inception",
+            "The Matrix",
+            "Interstellar",
+            "The Dark Knight",
+            "Pulp Fiction",
+            "Forrest Gump",
+            "The Shawshank Redemption",
+            "Fight Club",
+            "The Godfather",
+            "Jurassic Park",
+            "The Lion King",
+            "Star Wars",
+            "The Avengers",
+            "Back to the Future",
+            "Titanic",
+            "Gladiator",
+            "The Lord of the Rings",
+            "Harry Potter",
+            "Avatar",
+            "Toy Story",
+            "Finding Nemo",
+            "The Terminator",
+            "Mad Max",
+            "E.T. the Extra-Terrestrial"
+        );
+    
         $current_mode_index = 0;
-
+    
         for ( $i = 1; $i <= $course_count; $i++ ) {
-            $course_title = "{$course_prefix} {$global_counter}"; // Use the global counter for unique naming
+            // Generate a random course name from movie titles
+            $course_title = self::generate_random_course_name( $movie_titles, $course_prefix, $global_counter );
             $course_content = "This is the content for {$course_title}.";
-
+    
             $access_mode = $specified_access_mode ? $specified_access_mode : array_keys( $access_modes )[ $current_mode_index ];
-            
+    
             // Insert the course post
             $course_id = wp_insert_post( array(
                 'post_title'   => $course_title,
@@ -78,25 +106,30 @@ class LDTT_Create_Courses {
                 'post_content' => $course_content,
                 'post_author'  => $admin_user_id, // Assign the admin user as the author
             ) );
-
+    
             if ( is_wp_error( $course_id ) ) {
                 return $course_id;
             }
-
+    
             // Update course meta with serialized data
             self::update_course_meta( $course_id, $access_mode );
-
+    
             $course_ids[] = $course_id;
             $global_counter++; // Increment the global counter after each course creation
-
+    
             // Cycle through access modes if no specific mode is provided
             if ( ! $specified_access_mode ) {
                 $current_mode_index = ( $current_mode_index + 1 ) % count( $access_modes );
             }
         }
-
+    
         return $course_ids;
     }
+    
+    private static function generate_random_course_name( $titles, $prefix, $counter ) {
+        $random_title = $titles[ array_rand( $titles ) ];
+        return "{$prefix} {$counter}: {$random_title}";
+    }    
 
     private static function update_course_meta( $course_id, $access_mode ) {
         // Prepare the base serialized array for _sfwd-courses
