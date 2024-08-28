@@ -1,122 +1,246 @@
 <?php
+/**
+ * LearnDash Create Quizzes.
+ *
+ * @since 4.2.0
+ * @package LearnDash\Quiz\Quizzes
+ */
 
-class LDTT_Create_Quizzes {
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
-    /**
-     * Handle the WP-CLI command to create quizzes within a LearnDash lesson or topic.
-     *
-     * @param array $args Positional arguments passed from the WP-CLI command.
-     * @param array $assoc_args Associative arguments passed from the WP-CLI command.
-     */
-    public static function handle( $args, $assoc_args ) {
-        $lesson_name = isset( $assoc_args['lesson'] ) ? $assoc_args['lesson'] : null;
-        $topic_name = isset( $assoc_args['topic'] ) ? $assoc_args['topic'] : null;
-        $quiz_count = isset( $assoc_args['quizzes'] ) ? intval( $assoc_args['quizzes'] ) : 1;
-
-        if ( !$lesson_name && !$topic_name ) {
-            LDTT_Helper::cli_error( "Please specify either a lesson or a topic to associate the quizzes with." );
-            return;
-        }
-
-        // Get or create the lesson or topic
-        $parent_id = $lesson_name ? self::get_or_create_lesson( $lesson_name ) : self::get_or_create_topic( $topic_name );
-        if ( is_wp_error( $parent_id ) ) {
-            LDTT_Helper::cli_error( $parent_id->get_error_message() );
-            return;
-        }
-
-        // Create quizzes under the lesson or topic
-        $quiz_ids = self::create_quizzes( $parent_id, $quiz_count );
-        if ( is_wp_error( $quiz_ids ) ) {
-            LDTT_Helper::cli_error( $quiz_ids->get_error_message() );
-        } else {
-            $parent_type = $lesson_name ? 'lesson' : 'topic';
-            $parent_name = $lesson_name ?: $topic_name;
-            LDTT_Helper::cli_success( "{$quiz_count} quizzes successfully created under the {$parent_type} '{$parent_name}'." );
-        }
-    }
+if ( ! class_exists( 'LDTT_Create_Quizzes' ) ) {
 
     /**
-     * Get an existing lesson by name or create a new one.
+     * Class LDTT_Create_Quizzes.
      *
-     * @param string $lesson_name The name of the lesson.
-     * @return int|WP_Error The lesson ID on success, WP_Error on failure.
+     * @since 4.2.0
      */
-    private static function get_or_create_lesson( $lesson_name ) {
-        $lesson = get_page_by_title( $lesson_name, OBJECT, 'sfwd-lessons' );
-        if ( $lesson ) {
-            return $lesson->ID;
-        }
+    class LDTT_Create_Quizzes {
 
-        $lesson_id = wp_insert_post( array(
-            'post_title'   => $lesson_name,
-            'post_type'    => 'sfwd-lessons',
-            'post_status'  => 'publish',
-            'post_content' => 'This is a sample lesson created by the LearnDash Testing Toolkit.',
-        ) );
+        /**
+         * Create a quiz and optionally create and associate questions.
+         *
+         * @param string $quiz_title The title of the quiz.
+         * @param array $quiz_data The data related to the quiz.
+         * @param array $questions Array of questions to create and associate with the quiz.
+         *
+         * @return int|WP_Error The new quiz ID or WP_Error on failure.
+         */
+        public function create_quiz( $quiz_title, $quiz_data = array(), $questions = array() ) {
+            if ( empty( $quiz_title ) ) {
+                return new WP_Error( 'missing_data', __( 'Missing quiz title.', 'learndash' ) );
+            }
 
-        if ( is_wp_error( $lesson_id ) ) {
-            return $lesson_id;
-        }
+            // Prepare quiz post data.
+            $quiz_args = array(
+                'post_title'  => wp_strip_all_tags( $quiz_title ),
+                'post_status' => 'publish',
+                'post_type'   => 'quiz',
+                'meta_input'  => $quiz_data,
+            );
 
-        return $lesson_id;
-    }
-
-    /**
-     * Get an existing topic by name or create a new one.
-     *
-     * @param string $topic_name The name of the topic.
-     * @return int|WP_Error The topic ID on success, WP_Error on failure.
-     */
-    private static function get_or_create_topic( $topic_name ) {
-        $topic = get_page_by_title( $topic_name, OBJECT, 'sfwd-topic' );
-        if ( $topic ) {
-            return $topic->ID;
-        }
-
-        $topic_id = wp_insert_post( array(
-            'post_title'   => $topic_name,
-            'post_type'    => 'sfwd-topic',
-            'post_status'  => 'publish',
-            'post_content' => 'This is a sample topic created by the LearnDash Testing Toolkit.',
-        ) );
-
-        if ( is_wp_error( $topic_id ) ) {
-            return $topic_id;
-        }
-
-        return $topic_id;
-    }
-
-    /**
-     * Create quizzes under a specified lesson or topic.
-     *
-     * @param int $parent_id The ID of the parent lesson or topic.
-     * @param int $quiz_count The number of quizzes to create.
-     * @return array|WP_Error An array of quiz IDs on success, WP_Error on failure.
-     */
-    private static function create_quizzes( $parent_id, $quiz_count ) {
-        $quiz_ids = array();
-
-        for ( $i = 1; $i <= $quiz_count; $i++ ) {
-            $quiz_title = "Sample Quiz {$i}";
-            $quiz_content = "This is sample quiz {$i} for parent ID {$parent_id}.";
-
-            $quiz_id = wp_insert_post( array(
-                'post_title'   => $quiz_title,
-                'post_type'    => 'sfwd-quiz',
-                'post_status'  => 'publish',
-                'post_content' => $quiz_content,
-                'post_parent'  => $parent_id, // Associate the quiz with the lesson or topic.
-            ) );
+            // Insert the quiz post.
+            $quiz_id = wp_insert_post( $quiz_args );
 
             if ( is_wp_error( $quiz_id ) ) {
                 return $quiz_id;
             }
 
-            $quiz_ids[] = $quiz_id;
+            // Associate quiz with a lesson if not already associated.
+            if ( empty( $quiz_data['lesson_id'] ) ) {
+                $lesson_id = $this->get_default_lesson_id();
+                if ( ! empty( $lesson_id ) ) {
+                    update_post_meta( $quiz_id, 'lesson_id', $lesson_id );
+                }
+            }
+
+            // Ensure a minimum of 5 questions is provided.
+            if ( count( $questions ) < 5 ) {
+                $questions = array_merge( $questions, $this->generate_dummy_questions( 5 - count( $questions ) ) );
+            }
+
+            // Create and associate questions with the quiz.
+            if ( ! empty( $questions ) ) {
+                $question_creator = new LDTT_Create_Questions();
+                $question_creator->create_questions_for_quiz( $quiz_id, $questions );
+            }
+
+            return $quiz_id;
         }
 
-        return $quiz_ids;
+        /**
+         * Get a random lesson ID that does not already have an associated quiz.
+         *
+         * @return int The lesson ID or 0 if no available lessons are found.
+         */
+        protected function get_default_lesson_id() {
+            $args = array(
+                'post_type'      => 'lesson',
+                'posts_per_page' => -1, // Fetch all lessons.
+                'post_status'    => 'publish',
+                'fields'         => 'ids',
+            );
+
+            $lessons = get_posts( $args );
+
+            if ( ! empty( $lessons ) && is_array( $lessons ) ) {
+                // Filter out lessons that already have quizzes associated with them.
+                $available_lessons = array_filter( $lessons, function( $lesson_id ) {
+                    $quiz_id = get_post_meta( $lesson_id, 'quiz_id', true );
+                    return empty( $quiz_id );
+                });
+
+                if ( ! empty( $available_lessons ) ) {
+                    // Randomize the selection.
+                    return $available_lessons[ array_rand( $available_lessons ) ];
+                }
+            }
+
+            return 0; // Return 0 if no available lessons are found.
+        }
+
+        /**
+         * Generate dummy questions to ensure a minimum of 5 questions per quiz.
+         *
+         * @param int $count The number of dummy questions to generate.
+         * @return array The array of dummy questions.
+         */
+        protected function generate_dummy_questions( $count ) {
+            $dummy_questions = array();
+        
+            // List of predefined dummy questions.
+            $predefined_questions = array(
+                array(
+                    'title'      => __( 'What is the acceleration due to gravity on Earth?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        '9.8 m/s²',
+                        '10 m/s²',
+                        '9.5 m/s²',
+                        '8.9 m/s²',
+                    ),
+                    'correct'    => 0, // First option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'Which law states that for every action, there is an equal and opposite reaction?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'Newton\'s First Law',
+                        'Newton\'s Second Law',
+                        'Newton\'s Third Law',
+                        'Law of Gravitation',
+                    ),
+                    'correct'    => 2, // Third option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'What is the formula for kinetic energy?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'KE = 1/2 mv^2',
+                        'KE = mv^2',
+                        'KE = 1/2 mv',
+                        'KE = 1/2 m^2v',
+                    ),
+                    'correct'    => 0, // First option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'Which of the following is a scalar quantity?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'Velocity',
+                        'Acceleration',
+                        'Force',
+                        'Temperature',
+                    ),
+                    'correct'    => 3, // Fourth option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'What is the unit of electric current?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'Volt',
+                        'Ampere',
+                        'Ohm',
+                        'Joule',
+                    ),
+                    'correct'    => 1, // Second option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'Which of the following is a fundamental data structure in computer science?', 'learndash' ),
+                    'type'       => 'multiple',
+                    'options'    => array(
+                        'Array',
+                        'Linked List',
+                        'Tree',
+                        'All of the above',
+                    ),
+                    'correct'    => 3, // Fourth option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'What does CPU stand for?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'Central Process Unit',
+                        'Central Processing Unit',
+                        'Control Processing Unit',
+                        'Computer Process Unit',
+                    ),
+                    'correct'    => 1, // Second option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'Which sorting algorithm has the best average-case complexity?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'Bubble Sort',
+                        'Quick Sort',
+                        'Insertion Sort',
+                        'Selection Sort',
+                    ),
+                    'correct'    => 1, // Second option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'Which language is known as the "mother" of all programming languages?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'Python',
+                        'C',
+                        'Java',
+                        'Assembly',
+                    ),
+                    'correct'    => 1, // Second option is correct.
+                    'points'     => 1,
+                ),
+                array(
+                    'title'      => __( 'What does HTML stand for?', 'learndash' ),
+                    'type'       => 'single',
+                    'options'    => array(
+                        'HyperText Markup Language',
+                        'HyperText Markdown Language',
+                        'HighText Markup Language',
+                        'HyperTool Markup Language',
+                    ),
+                    'correct'    => 0, // First option is correct.
+                    'points'     => 1,
+                ),
+            );
+        
+            // Randomly pick questions from predefined ones.
+            $total_questions = count( $predefined_questions );
+            for ( $i = 0; $i < $count; $i++ ) {
+                $dummy_questions[] = $predefined_questions[ $i % $total_questions ];
+            }
+        
+            return $dummy_questions;
+        }
     }
 }
