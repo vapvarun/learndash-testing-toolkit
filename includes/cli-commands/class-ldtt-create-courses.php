@@ -2,38 +2,48 @@
 
 class LDTT_Create_Courses {
 
-    public static function handle( $args, $assoc_args ) {
-        $course_prefix = isset( $assoc_args['prefix'] ) ? $assoc_args['prefix'] : 'Sample Course';
-        $batch_size = 5;
-        $total_courses = isset( $assoc_args['count'] ) ? intval( $assoc_args['count'] ) : 20;
-        $specified_access_mode = isset( $assoc_args['access_mode'] ) ? $assoc_args['access_mode'] : null;
-
-        // Get an admin user to assign as the author
-        $admin_user_id = self::get_admin_user_id();
-
-        if ( ! $admin_user_id ) {
-            LDTT_Helper::cli_error( "No admin users found to assign as author." );
-            return;
-        }
-
-        $remaining_courses = $total_courses;
-        $global_counter = 1; // Start the global counter for course numbering
-
-        while ( $remaining_courses > 0 ) {
-            $courses_to_create = min( $batch_size, $remaining_courses );
-
-            $course_ids = self::create_courses( $course_prefix, $courses_to_create, $specified_access_mode, $admin_user_id, $global_counter );
-            if ( is_wp_error( $course_ids ) ) {
-                LDTT_Helper::cli_error( $course_ids->get_error_message() );
-                return;
-            } else {
-                LDTT_Helper::cli_success( "{$courses_to_create} courses successfully created with the prefix '{$course_prefix}'." );
-            }
-
-            $remaining_courses -= $batch_size;
-            $global_counter += $courses_to_create; // Increment the counter by the number of courses created in this batch
-        }
+    public static function handle( $args = array(), $assoc_args = array() ) {
+    // Check for admin interface data
+    if ( empty( $args ) && empty( $assoc_args ) ) {
+        $assoc_args = array(
+            'prefix'      => isset( $_POST['prefix'] ) ? sanitize_text_field( $_POST['prefix'] ) : 'Sample Course',
+            'count'       => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 20,
+            'access_mode' => isset( $_POST['access_mode'] ) ? sanitize_text_field( $_POST['access_mode'] ) : null,
+        );
     }
+
+    $course_prefix = $assoc_args['prefix'];
+    $total_courses = $assoc_args['count'];
+    $specified_access_mode = $assoc_args['access_mode'];
+
+    // Get an admin user to assign as the author
+    $admin_user_id = self::get_admin_user_id();
+
+    if ( ! $admin_user_id ) {
+        return array( 'status' => 'error', 'message' => 'No admin users found to assign as author.' );
+    }
+
+    $remaining_courses = $total_courses;
+    $global_counter = 1;
+
+    $course_ids = array();
+    while ( $remaining_courses > 0 ) {
+        $courses_to_create = min( 5, $remaining_courses );
+
+        $created_course_ids = self::create_courses( $course_prefix, $courses_to_create, $specified_access_mode, $admin_user_id, $global_counter );
+
+        if ( is_wp_error( $created_course_ids ) ) {
+            return array( 'status' => 'error', 'message' => $created_course_ids->get_error_message() );
+        }
+
+        $course_ids = array_merge( $course_ids, $created_course_ids );
+
+        $remaining_courses -= $courses_to_create;
+        $global_counter += $courses_to_create;
+    }
+
+    return array( 'status' => 'success', 'message' => "{$total_courses} courses created successfully.", 'course_ids' => $course_ids );
+}
 
     private static function get_admin_user_id() {
         // Query for an admin user
