@@ -3,26 +3,28 @@
 class LDTT_Loader {
 
     /**
-     * Initialize the plugin by loading CLI commands if WP-CLI is available.
+     * Initialize the plugin by loading necessary files and CLI commands.
      */
     public static function init() {
-        
         // Load helper classes
         require_once LDTT_PLUGIN_DIR . 'includes/helpers/class-ldtt-helper.php';
         require_once LDTT_PLUGIN_DIR . 'includes/helpers/class-ldtt-sample-data.php';
-        
-        // Load CLI commands if WP-CLI is available.
+
+        // Include CLI command files to ensure they are always loaded
+        self::include_files();
+
+        // Load CLI commands if WP-CLI is available
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            self::include_files();
             self::load_cli_commands();
         }
-        
     }
 
     /**
      * Include all necessary CLI command files.
      */
     private static function include_files() {
+        error_log( 'Including CLI command files...' ); // Debugging log
+        
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-create-courses.php';
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-create-lessons.php';
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-create-topics.php';
