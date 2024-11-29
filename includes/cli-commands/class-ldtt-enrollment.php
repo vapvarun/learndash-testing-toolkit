@@ -3,29 +3,41 @@
 class LDTT_Enrollment {
 
     /**
-     * Handle the WP-CLI command to enroll users into a LearnDash course.
+     * Handle the command to enroll users into a LearnDash course.
      *
-     * @param array $args Positional arguments passed from the WP-CLI command.
-     * @param array $assoc_args Associative arguments passed from the WP-CLI command.
+     * @param array $args Positional arguments.
+     * @param array $assoc_args Associative arguments.
+     * @return array Structured result for success or error.
      */
-    public static function handle( $args, $assoc_args ) {
-        $course_name = isset( $assoc_args['course'] ) ? $assoc_args['course'] : 'Sample Course';
-        $user_count = isset( $assoc_args['users'] ) ? intval( $assoc_args['users'] ) : 5;
+    public static function handle( $args = array(), $assoc_args = array() ) {
+        // Check for admin input if no CLI arguments are provided
+        if ( empty( $args ) && empty( $assoc_args ) ) {
+            $assoc_args = array(
+                'course' => isset( $_POST['course'] ) ? sanitize_text_field( $_POST['course'] ) : 'Sample Course',
+                'users'  => isset( $_POST['users'] ) ? intval( $_POST['users'] ) : 5,
+            );
+        }
+
+        $course_name = $assoc_args['course'];
+        $user_count = $assoc_args['users'];
 
         // Get or create the course
         $course_id = self::get_or_create_course( $course_name );
         if ( is_wp_error( $course_id ) ) {
-            LDTT_Helper::cli_error( $course_id->get_error_message() );
-            return;
+            return array( 'status' => 'error', 'message' => $course_id->get_error_message() );
         }
 
         // Enroll users in the course
         $user_ids = self::create_and_enroll_users( $course_id, $user_count );
         if ( is_wp_error( $user_ids ) ) {
-            LDTT_Helper::cli_error( $user_ids->get_error_message() );
-        } else {
-            LDTT_Helper::cli_success( "{$user_count} users successfully enrolled in the course '{$course_name}'." );
+            return array( 'status' => 'error', 'message' => $user_ids->get_error_message() );
         }
+
+        return array(
+            'status'  => 'success',
+            'message' => "{$user_count} users successfully enrolled in the course '{$course_name}'.",
+            'user_ids' => $user_ids,
+        );
     }
 
     /**
@@ -74,7 +86,7 @@ class LDTT_Enrollment {
                 return $user_id;
             }
 
-            // Assign the 'subscriber' role to the user (or another role as needed)
+            // Assign the 'subscriber' role to the user
             $user = new WP_User( $user_id );
             $user->set_role( 'subscriber' );
 

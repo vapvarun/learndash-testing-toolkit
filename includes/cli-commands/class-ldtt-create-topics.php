@@ -1,34 +1,37 @@
 <?php
 class LDTT_Create_Topics {
 
-    public static function handle( $args, $assoc_args ) {
-        // Get the count from parameters or default to 50
-        $topic_count = isset( $assoc_args['count'] ) ? intval( $assoc_args['count'] ) : 50;
+    public static function handle( $args = array(), $assoc_args = array() ) {
+        // Check for admin input if no arguments are provided
+        if ( empty( $args ) && empty( $assoc_args ) ) {
+            $assoc_args = array(
+                'count'     => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 50,
+                'author_id' => isset( $_POST['author_id'] ) ? intval( $_POST['author_id'] ) : self::get_admin_user_id(),
+            );
+        }
 
-        // Check if a specific author ID is provided
-        $author_id = isset( $assoc_args['author_id'] ) ? intval( $assoc_args['author_id'] ) : self::get_admin_user_id();
+        $topic_count = $assoc_args['count'];
+        $author_id = $assoc_args['author_id'];
 
-        // Validate if the specific author exists
+        // Validate if the author exists
         if ( ! get_user_by( 'id', $author_id ) ) {
-            LDTT_Helper::cli_error( "Author ID {$author_id} is not a valid user." );
-            return;
+            return array( 'status' => 'error', 'message' => "Author ID {$author_id} is not a valid user." );
         }
 
         $lessons = self::get_available_lessons();
 
         if ( empty( $lessons ) ) {
-            LDTT_Helper::cli_error( "No available lessons found to assign topics." );
-            return;
+            return array( 'status' => 'error', 'message' => "No available lessons found to assign topics." );
         }
 
         $titles = self::generate_random_titles( $topic_count );
+        $created_topics = array();
 
         for ( $i = 0; $i < $topic_count; $i++ ) {
             $lesson_id = $lessons[ array_rand( $lessons ) ]; // Randomly assign to a lesson
-            $topic_title = isset($titles[$i]) ? trim($titles[$i]) : '';
+            $topic_title = isset( $titles[ $i ] ) ? trim( $titles[ $i ] ) : '';
 
             if ( empty( $topic_title ) ) {
-                LDTT_Helper::cli_error( "Topic title cannot be empty. Skipping topic creation." );
                 continue;
             }
 
@@ -36,27 +39,27 @@ class LDTT_Create_Topics {
                 'post_title'   => $topic_title,
                 'post_type'    => 'sfwd-topic',
                 'post_status'  => 'publish',
-                'post_author'  => $author_id, // Assign the specified user as the author
+                'post_author'  => $author_id,
             ) );
 
             if ( is_wp_error( $topic_id ) ) {
-                LDTT_Helper::cli_error( "Failed to create topic: " . $topic_title );
-            } else {
-                // Link the topic to the lesson
-                self::link_topic_to_lesson( $topic_id, $lesson_id );
-
-                // Update lesson steps
-                self::update_lesson_steps( $lesson_id, $topic_id );
-
-                // Update the course step count
-                self::update_course_steps($lesson_id);
-
-                // Ensure all necessary meta keys are set
-                self::update_topic_meta($topic_id, $lesson_id);
-
-                LDTT_Helper::cli_success( "Created topic '{$topic_title}' and assigned it to lesson ID {$lesson_id}." );
+                return array( 'status' => 'error', 'message' => "Failed to create topic: {$topic_title}" );
             }
+
+            // Link the topic to the lesson and update steps
+            self::link_topic_to_lesson( $topic_id, $lesson_id );
+            self::update_lesson_steps( $lesson_id, $topic_id );
+            self::update_course_steps( $lesson_id );
+            self::update_topic_meta( $topic_id, $lesson_id );
+
+            $created_topics[] = $topic_id;
         }
+
+        return array(
+            'status' => 'success',
+            'message' => count( $created_topics ) . " topics created successfully.",
+            'topic_ids' => $created_topics,
+        );
     }
 
     private static function get_available_lessons() {

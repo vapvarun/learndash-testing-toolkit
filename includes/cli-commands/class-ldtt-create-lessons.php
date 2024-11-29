@@ -1,38 +1,43 @@
 <?php
 class LDTT_Create_Lessons {
 
-    public static function handle( $args, $assoc_args ) {
-        // Get the count from parameters or default to 50
-        $lesson_count = isset( $assoc_args['count'] ) ? intval( $assoc_args['count'] ) : 50;
-
-        // Check if a specific course ID is provided
-        $specific_course_id = isset( $assoc_args['course_id'] ) ? intval( $assoc_args['course_id'] ) : null;
-
-        // Validate if the specific course exists
-        if ( $specific_course_id ) {
-            if ( get_post_type( $specific_course_id ) !== 'sfwd-courses' ) {
-                LDTT_Helper::cli_error( "Course ID {$specific_course_id} is not a valid course." );
-                return;
-            }
-            $courses = array( $specific_course_id ); // Use only this course
-        } else {
-            $courses = self::get_available_courses(); // Get all available courses
+    public static function handle( $args = array(), $assoc_args = array() ) {
+        // Check for admin input if no arguments are provided
+        if ( empty( $args ) && empty( $assoc_args ) ) {
+            $assoc_args = array(
+                'count'     => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 50,
+                'course_id' => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
+            );
         }
 
+        $lesson_count = $assoc_args['count'];
+        $specific_course_id = $assoc_args['course_id'];
+
+        // Validate the course ID if provided
+        if ( $specific_course_id && get_post_type( $specific_course_id ) !== 'sfwd-courses' ) {
+            return array( 'status' => 'error', 'message' => "Course ID {$specific_course_id} is not a valid course." );
+        }
+
+        $courses = $specific_course_id ? array( $specific_course_id ) : self::get_available_courses();
+
         if ( empty( $courses ) ) {
-            LDTT_Helper::cli_error( "No available courses found to assign lessons." );
-            return;
+            return array( 'status' => 'error', 'message' => "No available courses found to assign lessons." );
         }
 
         $titles = self::generate_random_titles( $lesson_count );
         $admin_user_id = self::get_admin_user_id();
 
+        if ( ! $admin_user_id ) {
+            return array( 'status' => 'error', 'message' => 'No admin users found to assign as author.' );
+        }
+
+        $created_lessons = array();
+
         for ( $i = 0; $i < $lesson_count; $i++ ) {
             $course_id = $specific_course_id ? $specific_course_id : $courses[ array_rand( $courses ) ];
-            $lesson_title = isset($titles[$i]) ? trim($titles[$i]) : '';
+            $lesson_title = isset( $titles[ $i ] ) ? trim( $titles[ $i ] ) : '';
 
             if ( empty( $lesson_title ) ) {
-                LDTT_Helper::cli_error( "Lesson title cannot be empty. Skipping lesson creation." );
                 continue;
             }
 
@@ -40,21 +45,25 @@ class LDTT_Create_Lessons {
                 'post_title'   => $lesson_title,
                 'post_type'    => 'sfwd-lessons',
                 'post_status'  => 'publish',
-                'post_author'  => $admin_user_id, // Assign the admin user as the author
+                'post_author'  => $admin_user_id,
             ) );
 
             if ( is_wp_error( $lesson_id ) ) {
-                LDTT_Helper::cli_error( "Failed to create lesson: " . $lesson_title );
-            } else {
-                // Link the lesson to the course
-                self::link_lesson_to_course( $lesson_id, $course_id );
-
-                // Update course steps
-                self::update_course_steps( $course_id, $lesson_id );
-
-                LDTT_Helper::cli_success( "Created lesson '{$lesson_title}' and assigned it to course ID {$course_id}." );
+                return array( 'status' => 'error', 'message' => "Failed to create lesson: {$lesson_title}" );
             }
+
+            // Link the lesson to the course and update steps
+            self::link_lesson_to_course( $lesson_id, $course_id );
+            self::update_course_steps( $course_id, $lesson_id );
+
+            $created_lessons[] = $lesson_id;
         }
+
+        return array(
+            'status'  => 'success',
+            'message' => count( $created_lessons ) . " lessons created successfully.",
+            'lesson_ids' => $created_lessons,
+        );
     }
 
     private static function get_available_courses() {

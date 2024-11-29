@@ -3,36 +3,48 @@
 class LDTT_Group_Leaders {
 
     /**
-     * Handle the WP-CLI command to create a Group Leader and assign them to a group.
+     * Handle the command to create a Group Leader and assign them to a group.
      *
-     * @param array $args Positional arguments passed from the WP-CLI command.
-     * @param array $assoc_args Associative arguments passed from the WP-CLI command.
+     * @param array $args Positional arguments.
+     * @param array $assoc_args Associative arguments.
+     * @return array Structured result for success or error.
      */
-    public static function handle( $args, $assoc_args ) {
-        $group_name = isset( $assoc_args['group'] ) ? $assoc_args['group'] : 'Sample Group';
-        $leader_name = isset( $assoc_args['leader'] ) ? $assoc_args['leader'] : 'Sample Leader';
+    public static function handle( $args = array(), $assoc_args = array() ) {
+        // Check for admin input if no CLI arguments are provided
+        if ( empty( $args ) && empty( $assoc_args ) ) {
+            $assoc_args = array(
+                'group'  => isset( $_POST['group'] ) ? sanitize_text_field( $_POST['group'] ) : 'Sample Group',
+                'leader' => isset( $_POST['leader'] ) ? sanitize_text_field( $_POST['leader'] ) : 'Sample Leader',
+            );
+        }
+
+        $group_name = $assoc_args['group'];
+        $leader_name = $assoc_args['leader'];
 
         // Create or find the group
         $group_id = self::get_or_create_group( $group_name );
         if ( is_wp_error( $group_id ) ) {
-            LDTT_Helper::cli_error( $group_id->get_error_message() );
-            return;
+            return array( 'status' => 'error', 'message' => $group_id->get_error_message() );
         }
 
         // Create the group leader user
         $leader_id = self::create_group_leader( $leader_name );
         if ( is_wp_error( $leader_id ) ) {
-            LDTT_Helper::cli_error( $leader_id->get_error_message() );
-            return;
+            return array( 'status' => 'error', 'message' => $leader_id->get_error_message() );
         }
 
         // Assign the leader to the group
         $result = self::assign_group_leader( $leader_id, $group_id );
         if ( is_wp_error( $result ) ) {
-            LDTT_Helper::cli_error( $result->get_error_message() );
-        } else {
-            LDTT_Helper::cli_success( "Group Leader '{$leader_name}' assigned to Group '{$group_name}' successfully." );
+            return array( 'status' => 'error', 'message' => $result->get_error_message() );
         }
+
+        return array(
+            'status'  => 'success',
+            'message' => "Group Leader '{$leader_name}' assigned to Group '{$group_name}' successfully.",
+            'group_id' => $group_id,
+            'leader_id' => $leader_id,
+        );
     }
 
     /**
@@ -70,6 +82,11 @@ class LDTT_Group_Leaders {
     private static function create_group_leader( $leader_name ) {
         $leader_username = sanitize_user( strtolower( str_replace( ' ', '_', $leader_name ) ) );
         $leader_email = $leader_username . '@example.com';
+
+        // Check if a user with the same email already exists
+        if ( email_exists( $leader_email ) ) {
+            return new WP_Error( 'user_exists', __( "A user with the email '{$leader_email}' already exists.", 'learndash-testing-toolkit' ) );
+        }
 
         $user_id = wp_create_user( $leader_username, wp_generate_password(), $leader_email );
 
