@@ -1,7 +1,226 @@
-/* Example CSS to style admin interface elements */
-.ldtt-custom-box {
-    background-color: #f9f9f9;
+/* LearnDash Testing Toolkit Admin Styles */
+
+.ldtt-tabs {
+    margin-top: 20px;
+}
+
+.nav-tab-wrapper {
+    border-bottom: 1px solid #c3c4c7;
+    margin-bottom: 20px;
+}
+
+.nav-tab {
+    background: #f1f1f1;
+    border: 1px solid #c3c4c7;
+    color: #50575e;
+    padding: 8px 12px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.4;
+    display: inline-block;
+    margin: 0 0 -1px 0;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+}
+
+.nav-tab:hover {
+    background: #fafafa;
+    color: #135e96;
+}
+
+.nav-tab.nav-tab-active {
+    background: #fff;
+    border-bottom: 1px solid #fff;
+    color: #000;
+    margin-bottom: -1px;
+}
+
+.tab-content {
+    display: none;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-top: none;
     padding: 20px;
-    border: 1px solid #ddd;
+    border-radius: 0 0 4px 4px;
+}
+
+.tab-content h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #1d2327;
+    font-size: 20px;
+    font-weight: 400;
+}
+
+.ldtt-form {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.ldtt-form .form-table {
+    margin-bottom: 20px;
+}
+
+.ldtt-form .form-table th {
+    padding: 15px 10px 15px 0;
+    width: 200px;
+    font-weight: 600;
+    color: #23282d;
+}
+
+.ldtt-form .form-table td {
+    padding: 15px 10px;
+}
+
+.ldtt-form input[type="text"],
+.ldtt-form input[type="number"],
+.ldtt-form select {
+    width: 300px;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    background: #fff;
+    color: #2c3338;
+}
+
+.ldtt-form input[type="text"]:focus,
+.ldtt-form input[type="number"]:focus,
+.ldtt-form select:focus {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 1px #2271b1;
+    outline: 2px solid transparent;
+}
+
+.ldtt-form input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.ldtt-form label {
+    display: inline-block;
+    margin-bottom: 8px;
+    font-weight: 400;
+    color: #50575e;
+}
+
+.ldtt-form .button {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid;
+    text-decoration: none;
+    display: inline-block;
+    margin: 0;
+    white-space: nowrap;
+    word-wrap: break-word;
+    -webkit-appearance: none;
+    box-sizing: border-box;
+}
+
+.ldtt-form .button-primary {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+}
+
+.ldtt-form .button-primary:hover {
+    background: #135e96;
+    border-color: #135e96;
+    color: #fff;
+}
+
+.ldtt-form .button-secondary {
+    background: #f6f7f7;
+    border-color: #dcdcde;
+    color: #50575e;
+}
+
+.ldtt-form .button-secondary:hover {
+    background: #f0f0f1;
+    border-color: #8c8f94;
+    color: #1d2327;
+}
+
+.notice {
+    background: #fff;
+    border-left: 4px solid #00a0d2;
+    box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.1);
+    margin: 5px 15px 2px;
+    padding: 1px 12px;
+}
+
+.notice.notice-warning {
+    border-left-color: #ffb900;
+}
+
+.notice.notice-error {
+    border-left-color: #dc3232;
+}
+
+.notice.notice-success {
+    border-left-color: #46b450;
+}
+
+.notice p {
+    margin: 12px 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 768px) {
+    .nav-tab {
+        display: block;
+        margin-bottom: 5px;
+        border-radius: 4px;
+    }
+    
+    .nav-tab.nav-tab-active {
+        margin-bottom: 5px;
+        border-bottom: 1px solid #c3c4c7;
+    }
+    
+    .tab-content {
+        border-top: 1px solid #c3c4c7;
+        border-radius: 4px;
+    }
+    
+    .ldtt-form .form-table th,
+    .ldtt-form .form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .ldtt-form input[type="text"],
+    .ldtt-form input[type="number"],
+    .ldtt-form select {
+        width: 100%;
+        max-width: 400px;
+    }
+}
+
+/* Utility Classes */
+.ldtt-hidden {
+    display: none !important;
+}
+
+.ldtt-text-center {
+    text-align: center;
+}
+
+.ldtt-margin-top {
+    margin-top: 20px;
+}
+
+.ldtt-margin-bottom {
     margin-bottom: 20px;
 }

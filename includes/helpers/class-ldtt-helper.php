@@ -3,38 +3,12 @@
 class LDTT_Helper {
 
     /**
-     * Create a WordPress post of a given type.
-     *
-     * @param string $post_type The type of post to create (e.g., 'sfwd-courses', 'sfwd-lessons').
-     * @param string $title The title of the post.
-     * @param string $content The content of the post.
-     * @param array  $meta Optional. Array of meta keys and values to add to the post.
-     * @return int|WP_Error The post ID on success, WP_Error on failure.
-     */
-    public static function create_post( $post_type, $title, $content = '', $meta = array() ) {
-        $post_id = wp_insert_post( array(
-            'post_title'   => $title,
-            'post_type'    => $post_type,
-            'post_status'  => 'publish',
-            'post_content' => $content,
-        ) );
-
-        if ( ! is_wp_error( $post_id ) && ! empty( $meta ) ) {
-            foreach ( $meta as $key => $value ) {
-                update_post_meta( $post_id, $key, $value );
-            }
-        }
-
-        return $post_id;
-    }
-
-    /**
      * Check if LearnDash is active.
      *
      * @return bool True if LearnDash is active, false otherwise.
      */
     public static function is_learndash_active() {
-        return class_exists( 'LearnDash_Settings_Section' );
+        return function_exists( 'learndash_get_post_type_slug' ) || class_exists( 'LDLMS_Post_Types' );
     }
 
     /**
@@ -44,7 +18,7 @@ class LDTT_Helper {
      * @return string The generated random string.
      */
     public static function generate_random_string( $length = 10 ) {
-        return substr( str_shuffle( '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ' ), 0, $length );
+        return substr( str_shuffle( '0123456789abcdefghijklmnopqrstuvwxyz' ), 0, $length );
     }
 
     /**
@@ -82,5 +56,108 @@ class LDTT_Helper {
         } else {
             self::log( 'Error: ' . $message );
         }
+    }
+
+    /**
+     * Validate positive integer with limits.
+     *
+     * @param mixed $value The value to validate.
+     * @param int $default Default value if validation fails.
+     * @param int $max Maximum allowed value.
+     * @return int Validated integer.
+     */
+    public static function validate_positive_int( $value, $default = 1, $max = null ) {
+        $value = absint( $value );
+        if ( $value < 1 ) {
+            $value = $default;
+        }
+        if ( $max && $value > $max ) {
+            $value = $max;
+        }
+        return $value;
+    }
+
+    /**
+     * Get admin user ID.
+     *
+     * @return int|false Admin user ID or false if not found.
+     */
+    public static function get_admin_user_id() {
+        $admins = get_users( array(
+            'role' => 'administrator',
+            'number' => 1,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+        ) );
+
+        return ! empty( $admins ) ? $admins[0]->ID : false;
+    }
+
+    /**
+     * Get random course titles.
+     *
+     * @param int $count Number of titles to return.
+     * @return array Array of course titles.
+     */
+    public static function get_random_course_titles( $count = 50 ) {
+        $titles = array(
+            'Introduction to Web Development',
+            'Advanced JavaScript Programming',
+            'Digital Marketing Fundamentals',
+            'Graphic Design Essentials',
+            'Project Management Basics',
+            'Data Science with Python',
+            'Mobile App Development',
+            'Social Media Strategy',
+            'Photography Masterclass',
+            'Business Analytics',
+            'UI/UX Design Principles',
+            'Content Marketing Strategy',
+            'WordPress Development',
+            'E-commerce Fundamentals',
+            'Leadership Skills',
+            'Time Management',
+            'Public Speaking',
+            'Creative Writing',
+            'Financial Planning',
+            'Entrepreneurship 101',
+        );
+
+        shuffle( $titles );
+        return array_slice( $titles, 0, min( $count, count( $titles ) ) );
+    }
+
+    /**
+     * Get random lesson titles.
+     *
+     * @param int $count Number of titles to return.
+     * @return array Array of lesson titles.
+     */
+    public static function get_random_lesson_titles( $count = 50 ) {
+        $titles = array(
+            'Getting Started with the Basics',
+            'Understanding Core Concepts',
+            'Practical Applications',
+            'Advanced Techniques',
+            'Best Practices and Tips',
+            'Common Mistakes to Avoid',
+            'Real-World Examples',
+            'Hands-On Exercise',
+            'Review and Assessment',
+            'Next Steps and Resources',
+            'Introduction and Overview',
+            'Setting Up Your Environment',
+            'Basic Terminology',
+            'Step-by-Step Guide',
+            'Troubleshooting Common Issues',
+            'Expert Strategies',
+            'Case Study Analysis',
+            'Interactive Workshop',
+            'Q&A Session',
+            'Final Project Guidelines',
+        );
+
+        shuffle( $titles );
+        return array_slice( $titles, 0, min( $count, count( $titles ) ) );
     }
 }

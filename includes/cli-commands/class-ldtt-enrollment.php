@@ -2,101 +2,96 @@
 
 class LDTT_Enrollment {
 
-    /**
-     * Handle the command to enroll users into a LearnDash course.
-     *
-     * @param array $args Positional arguments.
-     * @param array $assoc_args Associative arguments.
-     * @return array Structured result for success or error.
-     */
     public static function handle( $args = array(), $assoc_args = array() ) {
         // Check for admin input if no CLI arguments are provided
         if ( empty( $args ) && empty( $assoc_args ) ) {
             $assoc_args = array(
-                'course' => isset( $_POST['course'] ) ? sanitize_text_field( $_POST['course'] ) : 'Sample Course',
-                'users'  => isset( $_POST['users'] ) ? intval( $_POST['users'] ) : 5,
+                'course_id' => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
+                'count'     => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 10,
             );
         }
 
-        $course_name = $assoc_args['course'];
-        $user_count = $assoc_args['users'];
+        $course_id = ! empty( $assoc_args['course_id'] ) ? absint( $assoc_args['course_id'] ) : null;
+        $user_count = LDTT_Helper::validate_positive_int( $assoc_args['count'] ?? 10, 10, 100 );
 
-        // Get or create the course
-        $course_id = self::get_or_create_course( $course_name );
-        if ( is_wp_error( $course_id ) ) {
-            return array( 'status' => 'error', 'message' => $course_id->get_error_message() );
+        if ( ! $course_id ) {
+            $message = 'Course ID is required.';
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
         }
 
-        // Enroll users in the course
+        // Validate course ID
+        if ( get_post_type( $course_id ) !== learndash_get_post_type_slug( 'course' ) ) {
+            $message = "Course ID {$course_id} is not a valid course.";
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        $course_title = get_the_title( $course_id );
+
+        // Create and enroll users
         $user_ids = self::create_and_enroll_users( $course_id, $user_count );
         if ( is_wp_error( $user_ids ) ) {
-            return array( 'status' => 'error', 'message' => $user_ids->get_error_message() );
+            $message = $user_ids->get_error_message();
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
         }
 
+        $message = "{$user_count} users successfully created and enrolled in course '{$course_title}'.";
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::success( $message );
+            WP_CLI::line( 'User IDs: ' . implode( ', ', $user_ids ) );
+        }
         return array(
             'status'  => 'success',
-            'message' => "{$user_count} users successfully enrolled in the course '{$course_name}'.",
+            'message' => $message,
             'user_ids' => $user_ids,
         );
     }
 
-    /**
-     * Get an existing course by name or create a new one.
-     *
-     * @param string $course_name The name of the course.
-     * @return int|WP_Error The course ID on success, WP_Error on failure.
-     */
-    private static function get_or_create_course( $course_name ) {
-        $course = get_page_by_title( $course_name, OBJECT, 'sfwd-courses' );
-        if ( $course ) {
-            return $course->ID;
-        }
-
-        $course_id = wp_insert_post( array(
-            'post_title'   => $course_name,
-            'post_type'    => 'sfwd-courses',
-            'post_status'  => 'publish',
-            'post_content' => 'This is a sample course created by the LearnDash Testing Toolkit.',
-        ) );
-
-        if ( is_wp_error( $course_id ) ) {
-            return $course_id;
-        }
-
-        return $course_id;
-    }
-
-    /**
-     * Create users and enroll them in a course.
-     *
-     * @param int $course_id The ID of the course.
-     * @param int $user_count The number of users to create and enroll.
-     * @return array|WP_Error An array of user IDs on success, WP_Error on failure.
-     */
     private static function create_and_enroll_users( $course_id, $user_count ) {
         $user_ids = array();
 
         for ( $i = 1; $i <= $user_count; $i++ ) {
-            $username = 'user_' . strtolower( LDTT_Helper::generate_random_string( 5 ) );
+            $username = 'testuser_' . LDTT_Helper::generate_random_string( 8 );
             $email = $username . '@example.com';
 
-            $user_id = wp_create_user( $username, wp_generate_password(), $email );
+            $user_id = wp_create_user( $username, wp_generate_password( 12 ), $email );
 
             if ( is_wp_error( $user_id ) ) {
-                return $user_id;
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::warning( "Failed to create user: {$username}" );
+                }
+                continue;
             }
 
             // Assign the 'subscriber' role to the user
             $user = new WP_User( $user_id );
             $user->set_role( 'subscriber' );
 
-            // Enroll the user in the course
-            $result = ld_update_course_access( $user_id, $course_id, true );
+            // Mark as test user
+            update_user_meta( $user_id, '_ldtt_test_user', true );
+
+            // Enroll the user in the course using LearnDash function
+            $result = ld_update_course_access( $user_id, $course_id, false );
             if ( ! $result ) {
-                return new WP_Error( 'enrollment_failed', __( "Failed to enroll user '{$username}' in the course.", 'learndash-testing-toolkit' ) );
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::warning( "Failed to enroll user '{$username}' in the course." );
+                }
+                // Don't skip the user, just log the warning
             }
 
             $user_ids[] = $user_id;
+
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::line( "Created and enrolled user: {$username} (ID: {$user_id})" );
+            }
         }
 
         return $user_ids;

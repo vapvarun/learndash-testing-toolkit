@@ -3,239 +3,108 @@
 class LDTT_Create_Courses {
 
     public static function handle( $args = array(), $assoc_args = array() ) {
-    // Check for admin interface data
-    if ( empty( $args ) && empty( $assoc_args ) ) {
-        $assoc_args = array(
-            'prefix'      => isset( $_POST['prefix'] ) ? sanitize_text_field( $_POST['prefix'] ) : 'Sample Course',
-            'count'       => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 20,
-            'access_mode' => isset( $_POST['access_mode'] ) ? sanitize_text_field( $_POST['access_mode'] ) : null,
-        );
-    }
-
-    $course_prefix = $assoc_args['prefix'];
-    $total_courses = $assoc_args['count'];
-    $specified_access_mode = $assoc_args['access_mode'];
-
-    // Get an admin user to assign as the author
-    $admin_user_id = self::get_admin_user_id();
-
-    if ( ! $admin_user_id ) {
-        return array( 'status' => 'error', 'message' => 'No admin users found to assign as author.' );
-    }
-
-    $remaining_courses = $total_courses;
-    $global_counter = 1;
-
-    $course_ids = array();
-    while ( $remaining_courses > 0 ) {
-        $courses_to_create = min( 5, $remaining_courses );
-
-        $created_course_ids = self::create_courses( $course_prefix, $courses_to_create, $specified_access_mode, $admin_user_id, $global_counter );
-
-        if ( is_wp_error( $created_course_ids ) ) {
-            return array( 'status' => 'error', 'message' => $created_course_ids->get_error_message() );
+        // Check for admin interface data
+        if ( empty( $args ) && empty( $assoc_args ) ) {
+            $assoc_args = array(
+                'prefix'      => isset( $_POST['prefix'] ) ? sanitize_text_field( $_POST['prefix'] ) : 'Test Course',
+                'count'       => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 5,
+                'access_mode' => isset( $_POST['access_mode'] ) ? sanitize_text_field( $_POST['access_mode'] ) : null,
+            );
         }
 
-        $course_ids = array_merge( $course_ids, $created_course_ids );
+        $course_prefix = $assoc_args['prefix'] ?? 'Test Course';
+        $total_courses = LDTT_Helper::validate_positive_int( $assoc_args['count'] ?? 5, 5, 100 );
+        $specified_access_mode = $assoc_args['access_mode'] ?? null;
 
-        $remaining_courses -= $courses_to_create;
-        $global_counter += $courses_to_create;
-    }
+        // Get an admin user to assign as the author
+        $admin_user_id = LDTT_Helper::get_admin_user_id();
 
-    return array( 'status' => 'success', 'message' => "{$total_courses} courses created successfully.", 'course_ids' => $course_ids );
-}
-
-    private static function get_admin_user_id() {
-        // Query for an admin user
-        $admin_users = get_users( array(
-            'role'    => 'administrator',
-            'orderby' => 'ID',
-            'order'   => 'ASC',
-            'number'  => 1,
-        ) );
-
-        if ( ! empty( $admin_users ) && is_array( $admin_users ) ) {
-            return $admin_users[0]->ID; // Return the first admin user's ID
+        if ( ! $admin_user_id ) {
+            $message = 'No admin users found to assign as author.';
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
         }
 
-        return false; // No admin user found
+        $course_ids = self::create_courses( $course_prefix, $total_courses, $specified_access_mode, $admin_user_id );
+
+        if ( is_wp_error( $course_ids ) ) {
+            $message = $course_ids->get_error_message();
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        $message = "{$total_courses} courses created successfully.";
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::success( $message );
+            WP_CLI::line( 'Course IDs: ' . implode( ', ', $course_ids ) );
+        }
+        return array( 'status' => 'success', 'message' => $message, 'course_ids' => $course_ids );
     }
 
-    private static function create_courses( $course_prefix, $course_count, $admin_user_id, &$global_counter, $specified_access_mode = null ) {
+    private static function create_courses( $course_prefix, $course_count, $specified_access_mode, $admin_user_id ) {
         $course_ids = array();
-    
+
         $access_modes = array(
             'open' => 'Open',
             'free' => 'Free',
-            'buy-now' => 'Buy now',
-            'recurring' => 'Recurring',
+            'paynow' => 'Buy now',
+            'subscribe' => 'Recurring',
             'closed' => 'Closed'
         );
-    
-        $movie_titles = array(
-            "Inception",
-            "The Matrix",
-            "Interstellar",
-            "The Dark Knight",
-            "Pulp Fiction",
-            "Forrest Gump",
-            "The Shawshank Redemption",
-            "Fight Club",
-            "The Godfather",
-            "Jurassic Park",
-            "The Lion King",
-            "Star Wars",
-            "The Avengers",
-            "Back to the Future",
-            "Titanic",
-            "Gladiator",
-            "The Lord of the Rings",
-            "Harry Potter",
-            "Avatar",
-            "Toy Story",
-            "Finding Nemo",
-            "The Terminator",
-            "Mad Max",
-            "E.T. the Extra-Terrestrial"
-        );
-    
+
+        $movie_titles = LDTT_Helper::get_random_course_titles( $course_count );
         $current_mode_index = 0;
-    
+
         for ( $i = 1; $i <= $course_count; $i++ ) {
-            // Generate a random course name from movie titles
-            $course_title = self::generate_random_course_name( $movie_titles, $course_prefix, $global_counter );
+            $course_title = "{$course_prefix} {$i}: " . ( $movie_titles[ $i - 1 ] ?? 'Course' );
             $course_content = "This is the content for {$course_title}.";
-    
+
             $access_mode = $specified_access_mode ? $specified_access_mode : array_keys( $access_modes )[ $current_mode_index ];
-    
+
             // Insert the course post
             $course_id = wp_insert_post( array(
                 'post_title'   => $course_title,
-                'post_type'    => 'sfwd-courses',
+                'post_type'    => learndash_get_post_type_slug( 'course' ),
                 'post_status'  => 'publish',
                 'post_content' => $course_content,
-                'post_author'  => $admin_user_id, // Assign the admin user as the author
+                'post_author'  => $admin_user_id,
+                'meta_input'   => array(
+                    '_ldtt_test_data' => true,
+                ),
             ) );
-    
+
             if ( is_wp_error( $course_id ) ) {
                 return $course_id;
             }
-    
-            // Update course meta with serialized data
-            self::update_course_meta( $course_id, $access_mode );
-    
+
+            // Update course settings using LearnDash functions
+            learndash_update_setting( $course_id, 'course_price_type', $access_mode );
+
+            if ( in_array( $access_mode, array( 'paynow', 'subscribe' ), true ) ) {
+                learndash_update_setting( $course_id, 'course_price', '99.00' );
+            }
+
+            if ( 'subscribe' === $access_mode ) {
+                learndash_update_setting( $course_id, 'course_price_billing_p3', '1' );
+                learndash_update_setting( $course_id, 'course_price_billing_t3', 'M' );
+            }
+
             $course_ids[] = $course_id;
-            $global_counter++; // Increment the global counter after each course creation
-    
+
             // Cycle through access modes if no specific mode is provided
             if ( ! $specified_access_mode ) {
                 $current_mode_index = ( $current_mode_index + 1 ) % count( $access_modes );
             }
-        }
-    
-        return $course_ids;
-    }    
-    
-    private static function generate_random_course_name( $titles, $prefix, $counter ) {
-        $random_title = $titles[ array_rand( $titles ) ];
-        return "{$prefix} {$counter}: {$random_title}";
-    }    
 
-    private static function update_course_meta( $course_id, $access_mode ) {
-        // Prepare the base serialized array for _sfwd-courses
-        $course_meta = array(
-            'sfwd-courses_course_start_date' => '0',
-            'sfwd-courses_course_end_date' => '0',
-            'sfwd-courses_course_seats_limit' => 0,
-            'sfwd-courses_course_price_type' => $access_mode, // Set the access mode here
-            'sfwd-courses_custom_button_url' => get_site_url(), // Set to the site URL
-            'sfwd-courses_course_price' => '100', // Set price to 100
-            'sfwd-courses_course_prerequisite_enabled' => '',
-            'sfwd-courses_course_prerequisite' => '',
-            'sfwd-courses_course_prerequisite_compare' => 'ANY',
-            'sfwd-courses_course_points_enabled' => '',
-            'sfwd-courses_course_points' => '',
-            'sfwd-courses_course_points_access' => '',
-            'sfwd-courses_expire_access' => '',
-            'sfwd-courses_expire_access_days' => 0,
-            'sfwd-courses_expire_access_delete_progress' => '',
-            'sfwd-courses_course_price_billing_p3' => '',
-            'sfwd-courses_course_trial_price' => '',
-            'sfwd-courses_course_trial_duration_t1' => '',
-            'sfwd-courses_course_trial_duration_p1' => '',
-            'sfwd-courses_course_price_billing_t3' => '',
-            'sfwd-courses_course_materials_enabled' => '',
-            'sfwd-courses_course_completion_page' => '',
-            'sfwd-courses_course_materials' => '',
-            'sfwd-courses_certificate' => '',
-            'sfwd-courses_exam_challenge' => 0,
-            'sfwd-courses_course_disable_content_table' => '',
-            'sfwd-courses_course_lesson_per_page' => '',
-            'sfwd-courses_course_lesson_per_page_custom' => '',
-            'sfwd-courses_course_topic_per_page_custom' => '',
-            'sfwd-courses_course_lesson_order_enabled' => '',
-            'sfwd-courses_course_lesson_orderby' => '',
-            'sfwd-courses_course_lesson_order' => '',
-            'sfwd-courses_course_disable_lesson_progression' => '',
-        );
-    
-        // Set specific values based on the access mode
-        switch ( $access_mode ) {
-            case 'paynow':
-                $course_meta['sfwd-courses_course_price_type'] = 'paynow';
-                update_post_meta( $course_id, '_ld_price_type', 'paynow' );
-                break;
-    
-            case 'subscribe':
-                $course_meta['sfwd-courses_course_price_type'] = 'subscribe';
-                $course_meta['sfwd-courses_course_price_billing_p3'] = '1'; // Billing cycle (e.g., 1 month)
-                $course_meta['sfwd-courses_course_price_billing_t3'] = 'M'; // Monthly
-                update_post_meta( $course_id, '_ld_price_type', 'subscribe' );
-                break;
-    
-            case 'open':
-                $course_meta['sfwd-courses_course_price_type'] = 'open';
-                update_post_meta( $course_id, '_ld_price_type', 'open' );
-                break;
-    
-            case 'closed':
-            default:
-                $course_meta['sfwd-courses_course_price_type'] = 'closed';
-                update_post_meta( $course_id, '_ld_price_type', 'closed' );
-                break;
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::line( "Created course: {$course_title} (ID: {$course_id})" );
+            }
         }
-    
-        // Serialize the array for _sfwd-courses
-        $serialized_meta = maybe_serialize( $course_meta );
-        update_post_meta( $course_id, '_sfwd-courses', $serialized_meta );
-    
-        // Set the course steps count to 0 initially
-        update_post_meta( $course_id, '_ld_course_steps_count', '0' );
-    
-        // Set the course steps (assuming no steps initially, can be updated later)
-        $course_steps = array(
-            'steps' => array(
-                'h' => array(
-                    'sfwd-lessons' => array(),
-                    'sfwd-quiz' => array(),
-                ),
-            ),
-            'course_id' => $course_id,
-            'version' => '4.13.0',
-            'empty' => true,
-            'course_builder_enabled' => true,
-            'course_shared_steps_enabled' => true,
-            'steps_count' => 0,
-        );
-        update_post_meta( $course_id, 'ld_course_steps', maybe_serialize( $course_steps ) );
-    
-        // Set the certificate (assuming no certificate assigned initially)
-        update_post_meta( $course_id, '_ld_certificate', '' );
-    
-        // Optional: Set edit lock and last edited by user (admin in this case)
-        $admin_user_id = self::get_admin_user_id(); // Reuse the function to get an admin user
-        update_post_meta( $course_id, '_edit_lock', time() . ':' . $admin_user_id );
-        update_post_meta( $course_id, '_edit_last', $admin_user_id );
+
+        return $course_ids;
     }
-    
 }
