@@ -15,7 +15,7 @@ class LDTT_Enrollment {
             $assoc_args = array(
                 'course_id'    => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
                 'count'        => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 10,
-                'use_existing' => isset( $_POST['use_existing'] ) ? true : false,
+                'use_existing' => isset( $_POST['use_existing_users'] ) && $_POST['use_existing_users'] ? true : false,
             );
         }
 
@@ -28,7 +28,44 @@ class LDTT_Enrollment {
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
                 WP_CLI::error( $message );
             }
-            return array(
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        // Validate course ID
+        if ( get_post_type( $course_id ) !== learndash_get_post_type_slug( 'course' ) ) {
+            $message = "Course ID {$course_id} is not a valid course.";
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        $course_title = get_the_title( $course_id );
+
+        // ENHANCED: Choose method based on use_existing flag
+        if ( $use_existing ) {
+            $user_ids = self::enroll_existing_users( $course_id, $user_count );
+        } else {
+            $user_ids = self::create_and_enroll_users( $course_id, $user_count );
+        }
+
+        if ( is_wp_error( $user_ids ) ) {
+            $message = $user_ids->get_error_message();
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        $action_text = $use_existing ? 'enrolled existing' : 'created and enrolled';
+        $message = count( $user_ids ) . " users successfully {$action_text} in course '{$course_title}'.";
+        
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::success( $message );
+            WP_CLI::line( 'User IDs: ' . implode( ', ', $user_ids ) );
+        }
+        
+        return array(
             'status'  => 'success',
             'message' => $message,
             'user_ids' => $user_ids,
@@ -170,41 +207,5 @@ class LDTT_Enrollment {
         }
 
         return false;
-    }( 'status' => 'error', 'message' => $message );
-        }
-
-        // Validate course ID
-        if ( get_post_type( $course_id ) !== learndash_get_post_type_slug( 'course' ) ) {
-            $message = "Course ID {$course_id} is not a valid course.";
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
-        }
-
-        $course_title = get_the_title( $course_id );
-
-        // ENHANCED: Choose method based on use_existing flag
-        if ( $use_existing ) {
-            $user_ids = self::enroll_existing_users( $course_id, $user_count );
-        } else {
-            $user_ids = self::create_and_enroll_users( $course_id, $user_count );
-        }
-
-        if ( is_wp_error( $user_ids ) ) {
-            $message = $user_ids->get_error_message();
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
-        }
-
-        $action_text = $use_existing ? 'enrolled existing' : 'created and enrolled';
-        $message = count( $user_ids ) . " users successfully {$action_text} in course '{$course_title}'.";
-        
-        if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::success( $message );
-            WP_CLI::line( 'User IDs: ' . implode( ', ', $user_ids ) );
-        }
-        
-        return array
+    }
+}
