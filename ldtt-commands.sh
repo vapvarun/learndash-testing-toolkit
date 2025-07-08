@@ -2,7 +2,7 @@
 
 # ============================================================================
 # LEARNDASH TESTING TOOLKIT - COMPLETE COMMANDS REFERENCE
-# Version: 1.2.0 (Production Ready)
+# Version: 1.2.1 (Enhanced with User-Specific Operations)
 # ============================================================================
 
 # Colors for output
@@ -15,8 +15,8 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${CYAN}=================================================="
-echo -e "LEARNDASH TESTING TOOLKIT - COMMANDS REFERENCE"
-echo -e "Version: 1.2.0 (Production Ready)"
+echo -e "LEARNDASH TESTING TOOLKIT - COMPLETE COMMANDS"
+echo -e "Version: 1.2.1 (Enhanced with User-Specific Operations)"
 echo -e "==================================================${NC}"
 
 # ============================================================================
@@ -70,7 +70,7 @@ echo "# Create questions for existing quiz"
 echo "wp ldtt create-questions --quiz_id=789 --count=10"
 
 # ============================================================================
-# 🎯 ENHANCED USER DISTRIBUTION (NEW!)
+# 🎯 ENHANCED USER DISTRIBUTION (DUAL MODE)
 # ============================================================================
 
 echo -e "\n${GREEN}🚀 ENHANCED USER DISTRIBUTION (DUAL MODE)${NC}"
@@ -86,7 +86,7 @@ echo ""
 echo "# Explicitly create new users"
 echo "wp ldtt enhanced-user-distribution --total_users=200 --group_leaders=1 --group_members=2 --course_enrolled=5 --create_progress --create_new"
 
-echo -e "\n${YELLOW}🔄 USE EXISTING USERS MODE (New!)${NC}"
+echo -e "\n${YELLOW}🔄 USE EXISTING USERS MODE${NC}"
 echo "# Randomly assign roles to existing users"
 echo "wp ldtt enhanced-user-distribution --total_users=50 --group_leaders=2 --group_members=4 --course_enrolled=10 --create_progress --use_existing"
 echo ""
@@ -129,6 +129,22 @@ echo ""
 echo "# Overwrite existing progress"
 echo "wp ldtt assign-progress --course_id=123 --overwrite"
 
+echo -e "\n${YELLOW}👤 ASSIGN COURSES AND PROGRESS TO SPECIFIC USER${NC}"
+echo "# Enroll specific user in all available courses"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$courses = get_posts(array('post_type' => 'sfwd-courses', 'fields' => 'ids', 'numberposts' => -1)); foreach(\$courses as \$course_id) { ld_update_course_access(\$user->ID, \$course_id); }\""
+echo ""
+echo "# Enroll user in specific courses by ID"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$courses = array(123, 124, 125); foreach(\$courses as \$course_id) { ld_update_course_access(\$user->ID, \$course_id); }\""
+echo ""
+echo "# Add progress to specific user's enrolled courses"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$courses = learndash_user_get_enrolled_courses(\$user->ID); foreach(\$courses as \$course_id) { \$lessons = learndash_get_course_lessons_list(\$course_id); \$complete = rand(1, count(\$lessons)); for(\$i = 0; \$i < \$complete; \$i++) { if(isset(\$lessons[\$i])) { learndash_process_mark_complete(\$user->ID, \$lessons[\$i]['post']->ID); } } }\""
+echo ""
+echo "# Comprehensive setup for specific user (enroll + progress + groups)"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$courses = get_posts(array('post_type' => 'sfwd-courses', 'fields' => 'ids', 'numberposts' => -1)); \$selected = array_rand(\$courses, min(10, count(\$courses))); foreach(\$selected as \$index) { ld_update_course_access(\$user->ID, \$courses[\$index]); } \$enrolled = learndash_user_get_enrolled_courses(\$user->ID); foreach(\$enrolled as \$course_id) { \$lessons = learndash_get_course_lessons_list(\$course_id); \$complete_count = rand(1, count(\$lessons)); for(\$i = 0; \$i < \$complete_count; \$i++) { if(isset(\$lessons[\$i])) { learndash_process_mark_complete(\$user->ID, \$lessons[\$i]['post']->ID); } } }\""
+echo ""
+echo "# Verify user's course enrollment and progress"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$courses = learndash_user_get_enrolled_courses(\$user->ID); echo 'Enrolled in: ' . count(\$courses) . ' courses\\n'; foreach(\$courses as \$course_id) { \$progress = learndash_course_progress(\$user->ID, \$course_id); echo '- Course ' . \$course_id . ': ' . \$progress['percentage'] . '% complete\\n'; }\""
+
 # ============================================================================
 # 👥 USER AND GROUP MANAGEMENT
 # ============================================================================
@@ -163,6 +179,19 @@ echo "wp ldtt group-enrollment --group='Training Group 1' --users=20"
 echo ""
 echo "# Large group enrollment"
 echo "wp ldtt group-enrollment --group='Main Group' --users=50"
+
+echo -e "\n${YELLOW}🔍 USER-SPECIFIC OPERATIONS${NC}"
+echo "# Get user ID by username"
+echo "wp user get username --field=ID"
+echo ""
+echo "# Check user's current course enrollments"
+echo "wp eval \"echo 'User enrollments: ' . count(learndash_user_get_enrolled_courses(get_user_by('login', 'username')->ID));\""
+echo ""
+echo "# List user's groups"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$groups = learndash_get_users_group_ids(\$user->ID); echo 'Groups: ' . count(\$groups) . '\\n'; foreach(\$groups as \$group_id) { echo '- ' . get_the_title(\$group_id) . '\\n'; }\""
+echo ""
+echo "# Check user's role and LDTT metadata"
+echo "wp eval \"\$user = get_user_by('login', 'username'); echo 'Role: ' . implode(', ', \$user->roles) . '\\n'; echo 'LDTT Type: ' . get_user_meta(\$user->ID, '_ldtt_user_type', true) . '\\n'; echo 'Progress Created: ' . (get_user_meta(\$user->ID, '_ldtt_progress_created', true) ? 'Yes' : 'No') . '\\n';\""
 
 # ============================================================================
 # 🧹 CLEANUP COMMANDS
@@ -199,6 +228,85 @@ echo "wp ldtt delete-items --courses --lessons --topics --quizzes --groups --con
 echo ""
 echo "# Delete everything (DANGEROUS!)"
 echo "wp ldtt delete-items --courses --lessons --topics --quizzes --groups --users --confirm"
+
+echo -e "\n${YELLOW}🗑️ REMOVE USER-SPECIFIC DATA${NC}"
+echo "# Remove specific user from all courses"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$courses = learndash_user_get_enrolled_courses(\$user->ID); foreach(\$courses as \$course_id) { ld_update_course_access(\$user->ID, \$course_id, \$remove = true); }\""
+echo ""
+echo "# Remove user from all groups"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$groups = learndash_get_users_group_ids(\$user->ID); foreach(\$groups as \$group_id) { \$users = get_post_meta(\$group_id, '_ld_group_users', true); if((\$key = array_search(\$user->ID, \$users)) !== false) { unset(\$users[\$key]); update_post_meta(\$group_id, '_ld_group_users', \$users); } }\""
+echo ""
+echo "# Reset user's course progress"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$courses = learndash_user_get_enrolled_courses(\$user->ID); foreach(\$courses as \$course_id) { delete_user_meta(\$user->ID, 'course_completed_' . \$course_id); delete_user_meta(\$user->ID, 'course_' . \$course_id . '_access_from'); }\""
+
+# ============================================================================
+# 🔍 VERIFICATION AND MONITORING COMMANDS
+# ============================================================================
+
+echo -e "\n${GREEN}🔍 VERIFICATION AND MONITORING${NC}"
+echo -e "${BLUE}────────────────────────────────────${NC}"
+
+echo -e "\n${YELLOW}📊 CHECK PLUGIN STATUS${NC}"
+echo "# Check if LearnDash is detected"
+echo "wp eval \"var_dump(ldtt_is_learndash_available());\""
+echo ""
+echo "# Get test data statistics"
+echo "wp eval \"print_r(ldtt_get_test_statistics());\""
+echo ""
+echo "# Check plugin status"
+echo "wp eval \"print_r(ldtt()->get_plugin_info());\""
+
+echo -e "\n${YELLOW}📈 CHECK USER DISTRIBUTION RESULTS${NC}"
+echo "# Count users by type"
+echo "wp eval \""
+echo "echo 'Group Leaders: ' . count(get_users(array('role' => 'group_leader'))) . \"\\n\";"
+echo "echo 'Group Members: ' . count(get_users(array('meta_key' => '_ldtt_user_type', 'meta_value' => 'group_member'))) . \"\\n\";"
+echo "echo 'Course Enrolled: ' . count(get_users(array('meta_key' => '_ldtt_user_type', 'meta_value' => 'course_enrolled'))) . \"\\n\";"
+echo "echo 'With Progress: ' . count(get_users(array('meta_key' => '_ldtt_progress_created'))) . \"\\n\";"
+echo "\""
+
+echo -e "\n${YELLOW}🎯 CHECK COURSE RELATIONSHIPS${NC}"
+echo "# List all courses and their content count"
+echo "wp post list --post_type=sfwd-courses --format=table --fields=ID,post_title"
+echo ""
+echo "# Check lessons for specific course"
+echo "wp post list --post_type=sfwd-lessons --meta_key=_sfwd-lessons --format=table"
+echo ""
+echo "# Check enrollments per course"
+echo "wp eval \""
+echo "\\$courses = get_posts(array('post_type' => 'sfwd-courses', 'fields' => 'ids'));"
+echo "foreach(\\$courses as \\$course_id) {"
+echo "    \\$users = learndash_get_users_for_course(\\$course_id);"
+echo "    \\$title = get_the_title(\\$course_id);"
+echo "    echo \"Course: {\\$title} ({\\$course_id}) - \" . count(\\$users) . \" enrolled users\\n\";"
+echo "}"
+echo "\""
+
+echo -e "\n${YELLOW}📋 DETAILED SYSTEM INFORMATION${NC}"
+echo "# WordPress and LearnDash versions"
+echo "wp core version"
+echo "wp plugin list --name=sfwd-lms --format=table"
+echo ""
+echo "# Database table sizes"
+echo "wp eval \""
+echo "global \\$wpdb;"
+echo "\\$tables = array('posts', 'users', 'usermeta', 'postmeta');"
+echo "foreach(\\$tables as \\$table) {"
+echo "    \\$count = \\$wpdb->get_var(\"SELECT COUNT(*) FROM {\\$wpdb->prefix}{\\$table}\");"
+echo "    echo \"Table {\\$table}: {\\$count} rows\\n\";"
+echo "}"
+echo "\""
+echo ""
+echo "# Memory usage"
+echo "wp eval \"echo 'Memory: ' . ldtt_format_bytes(memory_get_usage(true)) . ' / Peak: ' . ldtt_format_bytes(memory_get_peak_usage(true));\""
+
+echo -e "\n${YELLOW}💾 BACKUP AND RECOVERY${NC}"
+echo "# Create backup of test data"
+echo "wp eval \"print_r(ldtt_create_backup());\""
+echo ""
+echo "# Check existing users before using --use_existing"
+echo "wp user list --role=subscriber --format=count"
+echo "wp user list --role__not_in=administrator --format=count"
 
 # ============================================================================
 # 🏗️ COMPLETE WORKFLOW EXAMPLES
@@ -254,56 +362,15 @@ echo ""
 echo "# Phase 4: Add progress to any remaining enrolled users"
 echo "wp ldtt assign-progress --all_courses"
 
-# ============================================================================
-# 🔍 VERIFICATION AND MONITORING COMMANDS
-# ============================================================================
-
-echo -e "\n${GREEN}🔍 VERIFICATION AND MONITORING${NC}"
-echo -e "${BLUE}────────────────────────────────────${NC}"
-
-echo -e "\n${YELLOW}📊 CHECK PLUGIN STATUS${NC}"
-echo "# Check if LearnDash is detected"
-echo "wp eval \"var_dump(ldtt_is_learndash_available());\""
+echo -e "\n${YELLOW}👤 SCENARIO 5: Individual User Testing${NC}"
+echo "# Setup specific user for comprehensive testing"
+echo "wp eval \"\$user = get_user_by('login', 'testuser'); \$courses = get_posts(array('post_type' => 'sfwd-courses', 'fields' => 'ids', 'numberposts' => -1)); \$selected = array_rand(\$courses, min(8, count(\$courses))); foreach(\$selected as \$index) { ld_update_course_access(\$user->ID, \$courses[\$index]); } \$enrolled = learndash_user_get_enrolled_courses(\$user->ID); foreach(\$enrolled as \$course_id) { \$lessons = learndash_get_course_lessons_list(\$course_id); \$complete_count = rand(1, count(\$lessons)); for(\$i = 0; \$i < \$complete_count; \$i++) { if(isset(\$lessons[\$i])) { learndash_process_mark_complete(\$user->ID, \$lessons[\$i]['post']->ID); } } }\""
 echo ""
-echo "# Get test data statistics"
-echo "wp eval \"print_r(ldtt_get_test_statistics());\""
+echo "# Add specific user to groups"
+echo "wp eval \"\$user = get_user_by('login', 'testuser'); \$groups = get_posts(array('post_type' => 'groups', 'numberposts' => 2, 'orderby' => 'rand')); foreach(\$groups as \$group) { \$users = get_post_meta(\$group->ID, '_ld_group_users', true); if(!is_array(\$users)) \$users = array(); \$users[] = \$user->ID; update_post_meta(\$group->ID, '_ld_group_users', \$users); }\""
 echo ""
-echo "# Check plugin status"
-echo "wp eval \"print_r(ldtt()->get_plugin_info());\""
-
-echo -e "\n${YELLOW}📈 CHECK USER DISTRIBUTION RESULTS${NC}"
-echo "# Count users by type"
-echo "wp eval \""
-echo "echo 'Group Leaders: ' . count(get_users(array('role' => 'group_leader'))) . \"\\n\";"
-echo "echo 'Group Members: ' . count(get_users(array('meta_key' => '_ldtt_user_type', 'meta_value' => 'group_member'))) . \"\\n\";"
-echo "echo 'Course Enrolled: ' . count(get_users(array('meta_key' => '_ldtt_user_type', 'meta_value' => 'course_enrolled'))) . \"\\n\";"
-echo "echo 'With Progress: ' . count(get_users(array('meta_key' => '_ldtt_progress_created'))) . \"\\n\";"
-echo "\""
-
-echo -e "\n${YELLOW}🎯 CHECK COURSE RELATIONSHIPS${NC}"
-echo "# List all courses and their content count"
-echo "wp post list --post_type=sfwd-courses --format=table --fields=ID,post_title"
-echo ""
-echo "# Check lessons for specific course"
-echo "wp post list --post_type=sfwd-lessons --meta_key=_sfwd-lessons --format=table"
-echo ""
-echo "# Check enrollments per course"
-echo "wp eval \""
-echo "\\$courses = get_posts(array('post_type' => 'sfwd-courses', 'fields' => 'ids'));"
-echo "foreach(\\$courses as \\$course_id) {"
-echo "    \\$users = learndash_get_users_for_course(\\$course_id);"
-echo "    \\$title = get_the_title(\\$course_id);"
-echo "    echo \"Course: {\\$title} ({\\$course_id}) - \" . count(\\$users) . \" enrolled users\\n\";"
-echo "}"
-echo "\""
-
-echo -e "\n${YELLOW}💾 BACKUP AND RECOVERY${NC}"
-echo "# Create backup of test data"
-echo "wp eval \"print_r(ldtt_create_backup());\""
-echo ""
-echo "# Check existing users before using --use_existing"
-echo "wp user list --role=subscriber --format=count"
-echo "wp user list --role__not_in=administrator --format=count"
+echo "# Verify specific user setup"
+echo "wp eval \"\$user = get_user_by('login', 'testuser'); \$courses = learndash_user_get_enrolled_courses(\$user->ID); \$groups = learndash_get_users_group_ids(\$user->ID); echo 'User: ' . \$user->user_login . '\\n'; echo 'Courses: ' . count(\$courses) . '\\n'; echo 'Groups: ' . count(\$groups) . '\\n';\""
 
 # ============================================================================
 # ⚡ PERFORMANCE AND MAINTENANCE
@@ -370,6 +437,8 @@ echo "2. Create backups before major operations"
 echo "3. Test with small numbers first"
 echo "4. Use existing users mode for real environments"
 echo "5. Use new users mode for isolated testing"
+echo "6. Verify individual user setups with specific commands"
+echo "7. Monitor memory usage during large operations"
 
 echo -e "\n${YELLOW}🎯 PARAMETER GUIDELINES${NC}"
 echo "# Total Users: 10-1000 (start small, scale up)"
@@ -377,6 +446,19 @@ echo "# Group Leaders: 0.1-10% (typically 1-2%)"
 echo "# Group Members: 0.1-20% (typically 2-5%)"  
 echo "# Course Enrolled: 0.1-50% (typically 5-25%)"
 echo "# Progress: Always recommended for realistic testing"
+
+echo -e "\n${YELLOW}👤 USER-SPECIFIC BEST PRACTICES${NC}"
+echo "1. Always verify user exists before operations:"
+echo "   wp user get username --field=ID"
+echo ""
+echo "2. Check current enrollments before adding more:"
+echo "   wp eval \"echo count(learndash_user_get_enrolled_courses(get_user_by('login', 'username')->ID));\""
+echo ""
+echo "3. Use comprehensive setup for complete user testing:"
+echo "   # Includes courses, groups, and progress in one command"
+echo ""
+echo "4. Verify results after user-specific operations:"
+echo "   wp eval \"print user enrollment and progress verification command\""
 
 # ============================================================================
 # 🆘 TROUBLESHOOTING COMMANDS
@@ -410,6 +492,16 @@ echo "# Reactivate plugin"
 echo "wp plugin deactivate learndash-testing-toolkit"
 echo "wp plugin activate learndash-testing-toolkit"
 
+echo -e "\n${YELLOW}🔍 USER-SPECIFIC TROUBLESHOOTING${NC}"
+echo "# Check if user exists and get details"
+echo "wp user get username --format=json"
+echo ""
+echo "# Reset specific user's course data"
+echo "wp eval \"\$user = get_user_by('login', 'username'); delete_user_meta(\$user->ID, '_ldtt_user_type'); delete_user_meta(\$user->ID, '_ldtt_progress_created');\""
+echo ""
+echo "# Check user's enrollment status in specific course"
+echo "wp eval \"\$user = get_user_by('login', 'username'); \$course_id = 123; echo 'Enrolled: ' . (sfwd_lms_has_access(\$course_id, \$user->ID) ? 'Yes' : 'No');\""
+
 # ============================================================================
 # 📚 COMMAND REFERENCE SUMMARY
 # ============================================================================
@@ -435,14 +527,23 @@ echo "wp ldtt course-groups [--count=N] [--prefix=text]"
 echo "wp ldtt group-leaders [--group=name] [--leader=name] [--count=N]"
 echo "wp ldtt group-enrollment [--group=name] [--users=N]"
 
+echo -e "\n${PURPLE}Individual User Operations:${NC}"
+echo "wp user get username [--field=ID|--format=table]"
+echo "wp eval \"[user-specific PHP commands for enrollment/progress/groups]\""
+
 echo -e "\n${PURPLE}Cleanup:${NC}"
 echo "wp ldtt delete-items [--courses] [--lessons] [--topics] [--quizzes] [--groups] [--users] --confirm"
 
+echo -e "\n${PURPLE}Verification:${NC}"
+echo "wp eval \"print_r(ldtt_get_test_statistics());\""
+echo "wp eval \"[user verification commands]\""
+
 echo -e "\n${CYAN}=================================================="
-echo -e "LEARNDASH TESTING TOOLKIT - COMMANDS COMPLETE"
+echo -e "LEARNDASH TESTING TOOLKIT - COMPLETE REFERENCE"
+echo -e "Total Commands: 50+ different operations"
 echo -e "For support: https://github.com/vapvarun/learndash-testing-toolkit"
 echo -e "==================================================${NC}"
 
-# Save this file as: ldtt-commands.sh
-# Make executable: chmod +x ldtt-commands.sh
-# Run: ./ldtt-commands.sh
+# Save this file as: ldtt-complete-commands.sh
+# Make executable: chmod +x ldtt-complete-commands.sh
+# Run: ./ldtt-complete-commands.sh
