@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Command Factory Class - Updated with User-Specific Commands
+ * Command Factory Class - Updated with User-Specific Commands and Enhanced Validation
  * 
  * @package LearnDash_Testing_Toolkit
  * @since 1.2.0
@@ -62,7 +62,8 @@ class LDTT_Command_Factory {
                 'class' => 'LDTT_Enrollment',
                 'file'  => 'class-ldtt-enrollment.php',
                 'title' => 'User Enrollment',
-                'description' => 'Create users and enroll them in courses',
+                'description' => 'Create users and enroll them in courses, or enroll existing users',
+                'supports' => array( 'use_existing' ), // ENHANCED: Flag support
             ),
             'course-groups' => array(
                 'class' => 'LDTT_Course_Groups',
@@ -87,6 +88,7 @@ class LDTT_Command_Factory {
                 'file'  => 'class-ldtt-enhanced-user-distribution.php',
                 'title' => 'Enhanced User Distribution',
                 'description' => 'Create users with realistic distribution and progress',
+                'supports' => array( 'use_existing', 'safe_mode' ), // ENHANCED: Flag support
             ),
             'assign-progress' => array(
                 'class' => 'LDTT_Enhanced_User_Distribution',
@@ -94,8 +96,9 @@ class LDTT_Command_Factory {
                 'title' => 'Assign Progress to Enrolled Users',
                 'description' => 'Add realistic progress to existing enrolled users',
                 'method' => 'assign_progress_to_enrolled',
+                'supports' => array( 'user_percentage' ), // ENHANCED: Percentage support
             ),
-            // New user-specific commands
+            // ENHANCED: New user-specific commands
             'add-user-progress' => array(
                 'class' => 'LDTT_Add_User_Progress',
                 'file'  => 'class-ldtt-user-specific-commands.php',
@@ -166,7 +169,7 @@ class LDTT_Command_Factory {
     }
     
     /**
-     * Execute command
+     * Execute command with enhanced validation
      * 
      * @param string $command_name
      * @param array  $args
@@ -199,17 +202,29 @@ class LDTT_Command_Factory {
             );
         }
         
+        // ENHANCED: Pre-execution validation
+        $validation_result = $this->validate_command_params( $command_name, $assoc_args );
+        if ( is_wp_error( $validation_result ) ) {
+            return array(
+                'success' => false,
+                'message' => $validation_result->get_error_message(),
+            );
+        }
+        
         try {
             LDTT_Logger::info( "Executing command: {$command_name}", array(
                 'args' => $args,
-                'assoc_args' => $assoc_args,
+                'assoc_args' => $this->sanitize_args_for_log( $assoc_args ),
                 'method' => $method,
             ) );
             
             $result = call_user_func( array( $class_name, $method ), $args, $assoc_args );
             
             if ( is_array( $result ) ) {
-                LDTT_Logger::info( "Command completed: {$command_name}", array( 'result' => $result ) );
+                LDTT_Logger::info( "Command completed: {$command_name}", array( 
+                    'status' => $result['status'] ?? 'unknown',
+                    'message' => $result['message'] ?? 'No message'
+                ) );
                 return array(
                     'success' => $result['status'] === 'success',
                     'message' => $result['message'] ?? 'Command executed successfully',
@@ -233,49 +248,126 @@ class LDTT_Command_Factory {
     }
     
     /**
-     * Get available commands
+     * ENHANCED: Validate command parameters
      * 
-     * @return array
+     * @param string $command_name
+     * @param array $params
+     * @return bool|WP_Error
      */
-    public function get_commands() {
-        return $this->commands;
+    private function validate_command_params( $command_name, $params ) {
+        // Enhanced validation for specific commands
+        switch ( $command_name ) {
+            case 'enhanced-user-distribution':
+                return $this->validate_distribution_params( $params );
+                
+            case 'enrollment':
+                return $this->validate_enrollment_params( $params );
+                
+            case 'assign-progress':
+                return $this->validate_progress_params( $params );
+                
+            case 'add-user-progress':
+            case 'enroll-user-courses':
+            case 'user-info':
+                return $this->validate_user_specific_params( $command_name, $params );
+                
+            default:
+                return $this->validate_basic_params( $params );
+        }
     }
     
     /**
-     * Get command info
+     * Validate distribution command parameters
      * 
-     * @param string $command_name
-     * @return array|null
+     * @param array $params
+     * @return bool|WP_Error
      */
-    public function get_command_info( $command_name ) {
-        return isset( $this->commands[ $command_name ] ) ? $this->commands[ $command_name ] : null;
-    }
-
-    /**
-     * Get user-specific commands
-     * 
-     * @return array
-     */
-    public function get_user_commands() {
-        $user_commands = array();
+    private function validate_distribution_params( $params ) {
+        $total_users = absint( $params['total_users'] ?? 100 );
+        $group_leaders = floatval( $params['group_leaders'] ?? 1.0 );
+        $group_members = floatval( $params['group_members'] ?? 2.0 );
+        $course_enrolled = floatval( $params['course_enrolled'] ?? 5.0 );
         
-        foreach ( $this->commands as $command_name => $command_data ) {
-            if ( in_array( $command_name, array( 'add-user-progress', 'enroll-user-courses', 'user-info' ) ) ) {
-                $user_commands[ $command_name ] = $command_data;
+        if ( $total_users < 10 || $total_users > 1000 ) {
+            return new WP_Error( 'invalid_total_users', 'Total users must be between 10 and 1000' );
+        }
+        
+        $total_percentage = $group_leaders + $group_members + $course_enrolled;
+        if ( $total_percentage > 100 ) {
+            return new WP_Error( 'percentage_overflow', 'Total percentage cannot exceed 100%' );
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Validate enrollment command parameters
+     * 
+     * @param array $params
+     * @return bool|WP_Error
+     */
+    private function validate_enrollment_params( $params ) {
+        $course_id = absint( $params['course_id'] ?? 0 );
+        $count = absint( $params['count'] ?? 10 );
+        $use_existing = isset( $params['use_existing'] ) && $params['use_existing'];
+        
+        if ( ! $course_id ) {
+            return new WP_Error( 'missing_course_id', 'Course ID is required' );
+        }
+        
+        if ( get_post_type( $course_id ) !== learndash_get_post_type_slug( 'course' ) ) {
+            return new WP_Error( 'invalid_course', 'Invalid course ID provided' );
+        }
+        
+        if ( $count < 1 || $count > 300 ) {
+            return new WP_Error( 'invalid_count', 'Count must be between 1 and 300' );
+        }
+        
+        // If using existing users, check if enough users exist
+        if ( $use_existing ) {
+            $existing_count = count( get_users( array( 'role__not_in' => array( 'administrator' ), 'fields' => 'ID' ) ) );
+            if ( $existing_count < $count ) {
+                return new WP_Error( 'insufficient_users', "Only {$existing_count} existing users available, but {$count} requested" );
             }
         }
         
-        return $user_commands;
+        return true;
     }
-
+    
+    /**
+     * Validate progress assignment parameters
+     * 
+     * @param array $params
+     * @return bool|WP_Error
+     */
+    private function validate_progress_params( $params ) {
+        $course_id = absint( $params['course_id'] ?? 0 );
+        $all_courses = isset( $params['all_courses'] ) && $params['all_courses'];
+        $user_percentage = floatval( $params['user_percentage'] ?? 100 );
+        
+        if ( ! $all_courses && ! $course_id ) {
+            return new WP_Error( 'missing_target', 'Either course_id or all_courses must be specified' );
+        }
+        
+        if ( $course_id && get_post_type( $course_id ) !== learndash_get_post_type_slug( 'course' ) ) {
+            return new WP_Error( 'invalid_course', 'Invalid course ID provided' );
+        }
+        
+        if ( $user_percentage < 1 || $user_percentage > 100 ) {
+            return new WP_Error( 'invalid_percentage', 'User percentage must be between 1 and 100' );
+        }
+        
+        return true;
+    }
+    
     /**
      * Validate user-specific command parameters
      * 
      * @param string $command_name
      * @param array $params
-     * @return array
+     * @return bool|WP_Error
      */
-    public function validate_user_command_params( $command_name, $params ) {
+    private function validate_user_specific_params( $command_name, $params ) {
         $errors = array();
         
         switch ( $command_name ) {
@@ -322,502 +414,115 @@ class LDTT_Command_Factory {
                 break;
         }
         
-        return $errors;
-    }
-}
-
-/**
- * Data Manager Class - Enhanced with User-Specific Statistics
- * 
- * @package LearnDash_Testing_Toolkit
- * @since 1.2.0
- */
-class LDTT_Data_Manager {
-    
-    /**
-     * Test data meta key
-     */
-    const TEST_DATA_META_KEY = '_ldtt_test_data';
-    
-    /**
-     * User meta key
-     */
-    const TEST_USER_META_KEY = '_ldtt_test_user';
-    
-    /**
-     * Initialize data manager
-     */
-    public function init() {
-        // Hook into WordPress to mark our data
-        add_action( 'wp_insert_post', array( $this, 'maybe_mark_test_post' ), 10, 2 );
-        add_action( 'user_register', array( $this, 'maybe_mark_test_user' ) );
-    }
-    
-    /**
-     * Mark post as test data if created by LDTT
-     * 
-     * @param int $post_id
-     * @param WP_Post $post
-     */
-    public function maybe_mark_test_post( $post_id, $post ) {
-        // Check if this was called from an LDTT command
-        $backtrace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 10 );
-        
-        foreach ( $backtrace as $frame ) {
-            if ( isset( $frame['class'] ) && strpos( $frame['class'], 'LDTT_' ) === 0 ) {
-                $this->mark_post_as_test_data( $post_id );
-                break;
-            }
-        }
-    }
-    
-    /**
-     * Mark user as test user if created by LDTT
-     * 
-     * @param int $user_id
-     */
-    public function maybe_mark_test_user( $user_id ) {
-        // Check if this was called from an LDTT command
-        $backtrace = debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 10 );
-        
-        foreach ( $backtrace as $frame ) {
-            if ( isset( $frame['class'] ) && strpos( $frame['class'], 'LDTT_' ) === 0 ) {
-                $this->mark_user_as_test_data( $user_id );
-                break;
-            }
-        }
-    }
-    
-    /**
-     * Mark post as test data
-     * 
-     * @param int $post_id
-     * @return bool
-     */
-    public function mark_post_as_test_data( $post_id ) {
-        $result = update_post_meta( $post_id, self::TEST_DATA_META_KEY, true );
-        
-        if ( $result ) {
-            LDTT_Logger::debug( "Marked post {$post_id} as test data" );
+        if ( ! empty( $errors ) ) {
+            return new WP_Error( 'validation_failed', implode( '; ', $errors ) );
         }
         
-        return $result;
+        return true;
     }
     
     /**
-     * Mark user as test data
+     * Basic parameter validation
      * 
-     * @param int $user_id
-     * @return bool
+     * @param array $params
+     * @return bool|WP_Error
      */
-    public function mark_user_as_test_data( $user_id ) {
-        $result = update_user_meta( $user_id, self::TEST_USER_META_KEY, true );
-        
-        if ( $result ) {
-            LDTT_Logger::debug( "Marked user {$user_id} as test data" );
+    private function validate_basic_params( $params ) {
+        // Check for obviously invalid values
+        if ( isset( $params['count'] ) && ( $params['count'] < 1 || $params['count'] > 10000 ) ) {
+            return new WP_Error( 'invalid_count', 'Count must be between 1 and 10000' );
         }
         
-        return $result;
+        return true;
     }
     
     /**
-     * Get test posts by type
-     * 
-     * @param string $post_type
-     * @param array  $args
-     * @return array
-     */
-    public function get_test_posts( $post_type = '', $args = array() ) {
-        $default_args = array(
-            'post_status' => array( 'publish', 'draft', 'trash' ),
-            'numberposts' => -1,
-            'meta_query'  => array(
-                array(
-                    'key'     => self::TEST_DATA_META_KEY,
-                    'compare' => 'EXISTS',
-                ),
-            ),
-        );
-        
-        if ( ! empty( $post_type ) ) {
-            $default_args['post_type'] = $post_type;
-        }
-        
-        $args = wp_parse_args( $args, $default_args );
-        
-        return get_posts( $args );
-    }
-    
-    /**
-     * Get test users
+     * Sanitize arguments for logging (remove sensitive data)
      * 
      * @param array $args
      * @return array
      */
-    public function get_test_users( $args = array() ) {
-        $default_args = array(
-            'meta_key'   => self::TEST_USER_META_KEY,
-            'meta_value' => true,
-        );
+    private function sanitize_args_for_log( $args ) {
+        $sanitized = $args;
         
-        $args = wp_parse_args( $args, $default_args );
-        
-        return get_users( $args );
-    }
-    
-    /**
-     * Delete test posts
-     * 
-     * @param string $post_type
-     * @param bool   $force_delete
-     * @return array
-     */
-    public function delete_test_posts( $post_type = '', $force_delete = true ) {
-        $posts = $this->get_test_posts( $post_type );
-        $deleted = 0;
-        $errors = array();
-        
-        foreach ( $posts as $post ) {
-            $result = wp_delete_post( $post->ID, $force_delete );
-            
-            if ( $result ) {
-                $deleted++;
-                LDTT_Logger::debug( "Deleted test post: {$post->post_title} (ID: {$post->ID})" );
-            } else {
-                $errors[] = "Failed to delete post ID: {$post->ID}";
-                LDTT_Logger::warning( "Failed to delete test post ID: {$post->ID}" );
+        // Remove sensitive fields from logs
+        $sensitive_fields = array( 'password', 'email', 'api_key', 'token' );
+        foreach ( $sensitive_fields as $field ) {
+            if ( isset( $sanitized[ $field ] ) ) {
+                $sanitized[ $field ] = '[REDACTED]';
             }
         }
         
-        return array(
-            'total'   => count( $posts ),
-            'deleted' => $deleted,
-            'errors'  => $errors,
-        );
+        return $sanitized;
     }
     
     /**
-     * Delete test users
-     * 
-     * @param bool $reassign_posts
-     * @return array
-     */
-    public function delete_test_users( $reassign_posts = false ) {
-        $users = $this->get_test_users();
-        $deleted = 0;
-        $errors = array();
-        
-        foreach ( $users as $user ) {
-            // Don't delete admin users
-            if ( in_array( 'administrator', $user->roles, true ) ) {
-                $errors[] = "Skipped admin user: {$user->user_login}";
-                continue;
-            }
-            
-            $reassign_id = $reassign_posts ? $this->get_fallback_admin_id() : null;
-            $result = wp_delete_user( $user->ID, $reassign_id );
-            
-            if ( $result ) {
-                $deleted++;
-                LDTT_Logger::debug( "Deleted test user: {$user->user_login} (ID: {$user->ID})" );
-            } else {
-                $errors[] = "Failed to delete user ID: {$user->ID}";
-                LDTT_Logger::warning( "Failed to delete test user ID: {$user->ID}" );
-            }
-        }
-        
-        return array(
-            'total'   => count( $users ),
-            'deleted' => $deleted,
-            'errors'  => $errors,
-        );
-    }
-    
-    /**
-     * Get fallback admin ID for reassigning posts
-     * 
-     * @return int|null
-     */
-    private function get_fallback_admin_id() {
-        $admins = get_users( array(
-            'role'   => 'administrator',
-            'number' => 1,
-            'orderby' => 'ID',
-            'order'  => 'ASC',
-        ) );
-        
-        return ! empty( $admins ) ? $admins[0]->ID : null;
-    }
-    
-    /**
-     * Get test data statistics - Enhanced with User-Specific Data
+     * Get available commands
      * 
      * @return array
      */
-    public function get_test_data_statistics() {
-        $stats = array(
-            'posts' => array(),
-            'users' => 0,
-            'total_posts' => 0,
-            'user_progress' => array(),
-            'group_assignments' => array(),
-        );
-        
-        // Get post statistics by type
-        $post_types = array(
-            'sfwd-courses',
-            'sfwd-lessons',
-            'sfwd-topic',
-            'sfwd-quiz',
-            'sfwd-question',
-            'groups',
-        );
-        
-        foreach ( $post_types as $post_type ) {
-            $posts = $this->get_test_posts( $post_type );
-            $count = count( $posts );
-            $stats['posts'][ $post_type ] = $count;
-            $stats['total_posts'] += $count;
-        }
-        
-        // Get user statistics
-        $users = $this->get_test_users();
-        $stats['users'] = count( $users );
-        
-        // Get user types
-        $user_types = array();
-        $users_with_progress = 0;
-        $total_completion = 0;
-        
-        foreach ( $users as $user ) {
-            $user_type = get_user_meta( $user->ID, '_ldtt_user_type', true );
-            if ( $user_type ) {
-                if ( ! isset( $user_types[ $user_type ] ) ) {
-                    $user_types[ $user_type ] = 0;
-                }
-                $user_types[ $user_type ]++;
-            }
-            
-            // Check for progress data
-            $progress_rate = get_user_meta( $user->ID, '_ldtt_progress_completion_rate', true );
-            if ( $progress_rate ) {
-                $users_with_progress++;
-                $total_completion += $progress_rate;
-            }
-        }
-        
-        $stats['user_types'] = $user_types;
-        $stats['user_progress'] = array(
-            'users_with_progress' => $users_with_progress,
-            'average_completion' => $users_with_progress > 0 ? round( $total_completion / $users_with_progress, 2 ) : 0,
-        );
-        
-        // Get group assignment statistics
-        $groups = $this->get_test_posts( 'groups' );
-        $groups_with_leaders = 0;
-        $total_group_members = 0;
-        
-        foreach ( $groups as $group ) {
-            $leaders = get_post_meta( $group->ID, '_ld_group_administrators', true );
-            if ( ! empty( $leaders ) && is_array( $leaders ) ) {
-                $groups_with_leaders++;
-            }
-            
-            $members = get_post_meta( $group->ID, 'learndash_group_users_' . $group->ID, true );
-            if ( is_array( $members ) ) {
-                $total_group_members += count( $members );
-            }
-        }
-        
-        $stats['group_assignments'] = array(
-            'total_groups' => count( $groups ),
-            'groups_with_leaders' => $groups_with_leaders,
-            'total_group_members' => $total_group_members,
-            'leader_assignment_rate' => count( $groups ) > 0 ? round( ( $groups_with_leaders / count( $groups ) ) * 100, 2 ) : 0,
-        );
-        
-        return $stats;
+    public function get_commands() {
+        return $this->commands;
     }
     
     /**
-     * Get user-specific statistics
+     * Get command info
      * 
-     * @param int $user_id
+     * @param string $command_name
+     * @return array|null
+     */
+    public function get_command_info( $command_name ) {
+        return isset( $this->commands[ $command_name ] ) ? $this->commands[ $command_name ] : null;
+    }
+
+    /**
+     * Get user-specific commands
+     * 
      * @return array
      */
-    public function get_user_statistics( $user_id ) {
-        $user = get_user_by( 'ID', $user_id );
-        if ( ! $user ) {
-            return array();
-        }
+    public function get_user_commands() {
+        $user_commands = array();
         
-        $stats = array(
-            'user_id' => $user_id,
-            'username' => $user->user_login,
-            'is_test_user' => (bool) get_user_meta( $user_id, self::TEST_USER_META_KEY, true ),
-            'user_type' => get_user_meta( $user_id, '_ldtt_user_type', true ),
-            'enrollments' => array(),
-            'progress' => array(),
-            'group_memberships' => array(),
-        );
-        
-        // Get course enrollments
-        if ( function_exists( 'learndash_user_get_enrolled_courses' ) ) {
-            $enrolled_courses = learndash_user_get_enrolled_courses( $user_id );
-            foreach ( $enrolled_courses as $course_id ) {
-                $course_title = get_the_title( $course_id );
-                $progress_meta = get_user_meta( $user_id, '_ldtt_progress_course_' . $course_id, true );
-                
-                $stats['enrollments'][ $course_id ] = array(
-                    'title' => $course_title,
-                    'has_progress' => ! empty( $progress_meta ),
-                    'completion_rate' => $progress_meta['completion_rate'] ?? null,
-                );
+        foreach ( $this->commands as $command_name => $command_data ) {
+            if ( in_array( $command_name, array( 'add-user-progress', 'enroll-user-courses', 'user-info' ) ) ) {
+                $user_commands[ $command_name ] = $command_data;
             }
         }
         
-        // Get group memberships
-        if ( function_exists( 'learndash_get_users_group_ids' ) ) {
-            $group_ids = learndash_get_users_group_ids( $user_id );
-            foreach ( $group_ids as $group_id ) {
-                $group_title = get_the_title( $group_id );
-                $is_leader = $this->is_user_group_leader( $user_id, $group_id );
-                
-                $stats['group_memberships'][ $group_id ] = array(
-                    'title' => $group_title,
-                    'role' => $is_leader ? 'leader' : 'member',
-                );
-            }
-        }
-        
-        // Calculate progress statistics
-        $progress_rates = array_filter( array_column( $stats['enrollments'], 'completion_rate' ) );
-        $stats['progress'] = array(
-            'total_courses' => count( $stats['enrollments'] ),
-            'courses_with_progress' => count( $progress_rates ),
-            'average_completion' => ! empty( $progress_rates ) ? round( array_sum( $progress_rates ) / count( $progress_rates ), 2 ) : 0,
-        );
-        
-        return $stats;
+        return $user_commands;
     }
-    
+
     /**
-     * Check if user is a group leader
+     * Get commands that support specific features
      * 
-     * @param int $user_id
-     * @param int $group_id
+     * @param string $feature
+     * @return array
+     */
+    public function get_commands_with_support( $feature ) {
+        $supported_commands = array();
+        
+        foreach ( $this->commands as $command_name => $command_data ) {
+            if ( isset( $command_data['supports'] ) && in_array( $feature, $command_data['supports'] ) ) {
+                $supported_commands[ $command_name ] = $command_data;
+            }
+        }
+        
+        return $supported_commands;
+    }
+
+    /**
+     * Check if command supports a feature
+     * 
+     * @param string $command_name
+     * @param string $feature
      * @return bool
      */
-    private function is_user_group_leader( $user_id, $group_id ) {
-        $group_leaders = get_post_meta( $group_id, '_ld_group_administrators', true );
-        return is_array( $group_leaders ) && in_array( $user_id, $group_leaders );
-    }
-    
-    /**
-     * Clean all test data
-     * 
-     * @param array $options
-     * @return array
-     */
-    public function clean_all_test_data( $options = array() ) {
-        $defaults = array(
-            'posts' => true,
-            'users' => true,
-            'force_delete' => true,
-            'reassign_posts' => false,
-        );
-        
-        $options = wp_parse_args( $options, $defaults );
-        $results = array();
-        
-        try {
-            if ( $options['posts'] ) {
-                $post_types = array( 'sfwd-courses', 'sfwd-lessons', 'sfwd-topic', 'sfwd-quiz', 'sfwd-question', 'groups' );
-                
-                foreach ( $post_types as $post_type ) {
-                    $result = $this->delete_test_posts( $post_type, $options['force_delete'] );
-                    $results['posts'][ $post_type ] = $result;
-                }
-            }
-            
-            if ( $options['users'] ) {
-                $results['users'] = $this->delete_test_users( $options['reassign_posts'] );
-            }
-            
-            LDTT_Logger::info( 'Test data cleanup completed', $results );
-            
-        } catch ( Exception $e ) {
-            LDTT_Logger::error( 'Test data cleanup failed: ' . $e->getMessage() );
-            $results['error'] = $e->getMessage();
+    public function command_supports( $command_name, $feature ) {
+        if ( ! isset( $this->commands[ $command_name ] ) ) {
+            return false;
         }
         
-        return $results;
-    }
-    
-    /**
-     * Export test data
-     * 
-     * @return array
-     */
-    public function export_test_data() {
-        $export_data = array(
-            'version' => LDTT_VERSION,
-            'timestamp' => current_time( 'timestamp' ),
-            'posts' => array(),
-            'users' => array(),
-        );
-        
-        // Export posts
-        $post_types = array( 'sfwd-courses', 'sfwd-lessons', 'sfwd-topic', 'sfwd-quiz', 'sfwd-question', 'groups' );
-        
-        foreach ( $post_types as $post_type ) {
-            $posts = $this->get_test_posts( $post_type );
-            $export_data['posts'][ $post_type ] = array();
-            
-            foreach ( $posts as $post ) {
-                $export_data['posts'][ $post_type ][] = array(
-                    'ID' => $post->ID,
-                    'post_title' => $post->post_title,
-                    'post_content' => $post->post_content,
-                    'post_status' => $post->post_status,
-                    'post_meta' => get_post_meta( $post->ID ),
-                );
-            }
-        }
-        
-        // Export users
-        $users = $this->get_test_users();
-        foreach ( $users as $user ) {
-            $export_data['users'][] = array(
-                'ID' => $user->ID,
-                'user_login' => $user->user_login,
-                'user_email' => $user->user_email,
-                'display_name' => $user->display_name,
-                'roles' => $user->roles,
-                'user_meta' => get_user_meta( $user->ID ),
-            );
-        }
-        
-        return $export_data;
-    }
-    
-    /**
-     * Check if post is test data
-     * 
-     * @param int $post_id
-     * @return bool
-     */
-    public function is_test_post( $post_id ) {
-        return (bool) get_post_meta( $post_id, self::TEST_DATA_META_KEY, true );
-    }
-    
-    /**
-     * Check if user is test data
-     * 
-     * @param int $user_id
-     * @return bool
-     */
-    public function is_test_user( $user_id ) {
-        return (bool) get_user_meta( $user_id, self::TEST_USER_META_KEY, true );
+        $command_data = $this->commands[ $command_name ];
+        return isset( $command_data['supports'] ) && in_array( $feature, $command_data['supports'] );
     }
 }

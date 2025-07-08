@@ -3,13 +3,26 @@
 class LDTT_Progress_Manager {
 
     /**
-     * Create realistic course progress for a user.
+     * Create realistic course progress for a user - FIXED: Parameter validation
      *
      * @param int $user_id User ID.
      * @param int $course_id Course ID.
      * @param array $options Progress options.
+     * @return array|false Progress data or false on failure
      */
     public static function create_realistic_progress( $user_id, $course_id, $options = array() ) {
+        // FIXED: Ensure we're working with integers only
+        $user_id = absint( $user_id );
+        $course_id = absint( $course_id );
+        
+        // FIXED: Validate required parameters
+        if ( ! $user_id || ! $course_id ) {
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::warning( "Invalid user_id ({$user_id}) or course_id ({$course_id}) provided to progress manager" );
+            }
+            return false;
+        }
+        
         $defaults = array(
             'min_completion' => 25,
             'max_completion' => 100,
@@ -42,14 +55,14 @@ class LDTT_Progress_Manager {
         $lessons_to_complete = array_slice( $lessons_copy, 0, $items_to_complete );
         
         foreach ( $lessons_to_complete as $lesson ) {
-            $lesson_id = $lesson['post']->ID;
+            $lesson_id = absint( $lesson['post']->ID ); // FIXED: Ensure integer
             
             // Add realistic time progression (1-3 days between completions)
             if ( $options['random_timestamps'] ) {
                 $current_time += wp_rand( 3600, 259200 ); // 1 hour to 3 days
             }
             
-            // Mark lesson as completed with timestamp
+            // FIXED: Pass integers to LearnDash functions
             learndash_process_mark_complete( $user_id, $lesson_id, false, $course_id );
             
             // Update completion time in user activity
@@ -74,14 +87,16 @@ class LDTT_Progress_Manager {
                 
                 $completed_topics = array_slice( $topics, 0, $topics_to_complete );
                 foreach ( $completed_topics as $topic ) {
+                    $topic_id = absint( $topic->ID ); // FIXED: Ensure integer
                     $current_time += wp_rand( 300, 1800 ); // 5-30 minutes between topics
                     
-                    learndash_process_mark_complete( $user_id, $topic->ID, false, $course_id );
+                    // FIXED: Pass integers to LearnDash functions
+                    learndash_process_mark_complete( $user_id, $topic_id, false, $course_id );
                     
                     $topic_activity_args = array(
                         'course_id'     => $course_id,
                         'user_id'       => $user_id,
-                        'post_id'       => $topic->ID,
+                        'post_id'       => $topic_id,
                         'activity_type' => 'topic',
                         'activity_action' => 'insert',
                         'activity_status' => true,
@@ -96,17 +111,20 @@ class LDTT_Progress_Manager {
             // Handle quizzes if enabled
             if ( $options['include_quizzes'] ) {
                 $lesson_quizzes = learndash_get_lesson_quiz_list( $lesson_id, $user_id, $course_id );
-                foreach ( $lesson_quizzes as $quiz ) {
-                    // 70% chance to complete quiz
-                    if ( wp_rand( 1, 100 ) <= 70 ) {
-                        self::complete_quiz_with_score( $user_id, $quiz['post']->ID, $course_id, $current_time );
-                        $current_time += wp_rand( 600, 1800 ); // 10-30 minutes for quiz
+                if ( is_array( $lesson_quizzes ) ) { // FIXED: Validate array
+                    foreach ( $lesson_quizzes as $quiz ) {
+                        // 70% chance to complete quiz
+                        if ( wp_rand( 1, 100 ) <= 70 ) {
+                            $quiz_id = absint( $quiz['post']->ID ); // FIXED: Ensure integer
+                            self::complete_quiz_with_score( $user_id, $quiz_id, $course_id, $current_time );
+                            $current_time += wp_rand( 600, 1800 ); // 10-30 minutes for quiz
+                        }
                     }
                 }
             }
         }
         
-        // Update overall course progress
+        // Update overall course progress - FIXED: Pass integers only
         learndash_user_set_course_progress( $user_id, $course_id, array() );
         
         // Store progress metadata
@@ -132,7 +150,7 @@ class LDTT_Progress_Manager {
     }
     
     /**
-     * Complete a quiz with a realistic score.
+     * Complete a quiz with a realistic score - FIXED: Parameter validation
      *
      * @param int $user_id User ID.
      * @param int $quiz_id Quiz ID.
@@ -140,8 +158,18 @@ class LDTT_Progress_Manager {
      * @param int $timestamp Completion timestamp.
      */
     private static function complete_quiz_with_score( $user_id, $quiz_id, $course_id, $timestamp ) {
+        // FIXED: Ensure all parameters are integers
+        $user_id = absint( $user_id );
+        $quiz_id = absint( $quiz_id );
+        $course_id = absint( $course_id );
+        $timestamp = absint( $timestamp );
+        
+        if ( ! $user_id || ! $quiz_id || ! $course_id || ! $timestamp ) {
+            return false;
+        }
+        
         $questions = learndash_get_quiz_questions( $quiz_id );
-        $total_questions = count( $questions );
+        $total_questions = is_array( $questions ) ? count( $questions ) : 0; // FIXED: Validate array
         
         if ( $total_questions == 0 ) {
             return;
@@ -176,7 +204,7 @@ class LDTT_Progress_Manager {
         
         learndash_update_user_activity( $quiz_activity_args );
         
-        // Update quiz progress
+        // Update quiz progress - FIXED: Pass integers only
         learndash_process_mark_complete( $user_id, $quiz_id, false, $course_id );
         
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -235,5 +263,84 @@ class LDTT_Progress_Manager {
         }
         
         return $stats;
+    }
+
+    /**
+     * Create progress for multiple users efficiently - FIXED: Batch processing
+     * 
+     * @param array $user_ids Array of user IDs
+     * @param int $course_id Course ID
+     * @param array $options Progress options
+     * @return array Results summary
+     */
+    public static function create_bulk_progress( $user_ids, $course_id, $options = array() ) {
+        // FIXED: Validate and sanitize inputs
+        $course_id = absint( $course_id );
+        if ( ! $course_id ) {
+            return array( 'success' => false, 'message' => 'Invalid course ID' );
+        }
+        
+        if ( ! is_array( $user_ids ) || empty( $user_ids ) ) {
+            return array( 'success' => false, 'message' => 'No user IDs provided' );
+        }
+        
+        // FIXED: Ensure all user IDs are integers
+        $user_ids = array_filter( array_map( 'absint', $user_ids ) );
+        
+        $successful = 0;
+        $failed = 0;
+        
+        foreach ( $user_ids as $user_id ) {
+            $result = self::create_realistic_progress( $user_id, $course_id, $options );
+            
+            if ( $result !== false ) {
+                $successful++;
+            } else {
+                $failed++;
+            }
+        }
+        
+        return array(
+            'success' => true,
+            'message' => "Progress created for {$successful} users, {$failed} failed",
+            'successful' => $successful,
+            'failed' => $failed,
+            'total' => count( $user_ids )
+        );
+    }
+
+    /**
+     * Validate progress data before creation - FIXED: Enhanced validation
+     * 
+     * @param int $user_id
+     * @param int $course_id
+     * @return bool|WP_Error
+     */
+    public static function validate_progress_data( $user_id, $course_id ) {
+        // FIXED: Strict type validation
+        $user_id = absint( $user_id );
+        $course_id = absint( $course_id );
+        
+        if ( ! $user_id ) {
+            return new WP_Error( 'invalid_user', 'Invalid user ID provided' );
+        }
+        
+        if ( ! $course_id ) {
+            return new WP_Error( 'invalid_course', 'Invalid course ID provided' );
+        }
+        
+        // Check if user exists
+        $user = get_user_by( 'ID', $user_id );
+        if ( ! $user ) {
+            return new WP_Error( 'user_not_found', "User with ID {$user_id} not found" );
+        }
+        
+        // Check if course exists
+        $course = get_post( $course_id );
+        if ( ! $course || $course->post_type !== learndash_get_post_type_slug( 'course' ) ) {
+            return new WP_Error( 'course_not_found', "Course with ID {$course_id} not found" );
+        }
+        
+        return true;
     }
 }

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Admin Interface Class - Complete and Fixed
+ * Admin Interface Class - Updated with Enhanced User Management
  * 
  * @package LearnDash_Testing_Toolkit
  * @since 1.2.0
@@ -75,7 +75,7 @@ class LDTT_Admin_Interface {
     }
     
     /**
-     * Handle form submissions
+     * Handle form submissions with enhanced validation
      */
     public function handle_form_submissions() {
         if ( ! isset( $_POST['ldtt_command'] ) || ! current_user_can( 'manage_options' ) ) {
@@ -87,6 +87,20 @@ class LDTT_Admin_Interface {
         }
         
         $command = sanitize_text_field( $_POST['ldtt_command'] );
+        
+        // ENHANCED: Additional validation for specific commands
+        $validation_result = $this->validate_form_data( $command, $_POST );
+        if ( is_wp_error( $validation_result ) ) {
+            $redirect_url = add_query_arg( array(
+                'page' => 'ldtt-cli-commands',
+                'ldtt_message' => 'validation_error',
+                'ldtt_result' => urlencode( $validation_result->get_error_message() ),
+            ), admin_url( 'admin.php' ) );
+            
+            wp_safe_redirect( $redirect_url );
+            exit;
+        }
+        
         $result = $this->execute_command( $command );
         
         // Redirect with message
@@ -98,6 +112,45 @@ class LDTT_Admin_Interface {
         
         wp_safe_redirect( $redirect_url );
         exit;
+    }
+    
+    /**
+     * ENHANCED: Validate form data before execution
+     * 
+     * @param string $command
+     * @param array $post_data
+     * @return bool|WP_Error
+     */
+    private function validate_form_data( $command, $post_data ) {
+        switch ( $command ) {
+            case 'enrollment':
+                if ( empty( $post_data['course_id'] ) ) {
+                    return new WP_Error( 'missing_course', 'Course ID is required for enrollment' );
+                }
+                
+                $count = intval( $post_data['count'] );
+                if ( $count < 1 || $count > 300 ) {
+                    return new WP_Error( 'invalid_count', 'User count must be between 1 and 300' );
+                }
+                break;
+                
+            case 'enhanced-user-distribution':
+                $total_users = intval( $post_data['total_users'] );
+                if ( $total_users < 10 || $total_users > 1000 ) {
+                    return new WP_Error( 'invalid_total', 'Total users must be between 10 and 1000' );
+                }
+                
+                $group_leaders = floatval( $post_data['group_leaders'] );
+                $group_members = floatval( $post_data['group_members'] );
+                $course_enrolled = floatval( $post_data['course_enrolled'] );
+                
+                if ( ( $group_leaders + $group_members + $course_enrolled ) > 100 ) {
+                    return new WP_Error( 'percentage_overflow', 'Total percentage cannot exceed 100%' );
+                }
+                break;
+        }
+        
+        return true;
     }
     
     /**
@@ -125,6 +178,11 @@ class LDTT_Admin_Interface {
             } else {
                 $_POST['create_new'] = true;
             }
+        }
+
+        // ENHANCED: Process use_existing flag for enrollment
+        if ( $command === 'enrollment' && isset( $_POST['use_existing_users'] ) ) {
+            $_POST['use_existing'] = true;
         }
 
         return $command_factory->execute_command( $command, array(), $_POST );
@@ -199,7 +257,7 @@ class LDTT_Admin_Interface {
     }
     
     /**
-     * Show admin messages
+     * Show admin messages with enhanced types
      */
     private function show_admin_messages() {
         if ( isset( $_GET['ldtt_message'] ) ) {
@@ -210,6 +268,7 @@ class LDTT_Admin_Interface {
                 'activated' => array( 'type' => 'success', 'text' => __( 'LearnDash Testing Toolkit activated successfully!', 'learndash-testing-toolkit' ) ),
                 'command_success' => array( 'type' => 'success', 'text' => $result ?: __( 'Command executed successfully.', 'learndash-testing-toolkit' ) ),
                 'command_error' => array( 'type' => 'error', 'text' => $result ?: __( 'Command execution failed.', 'learndash-testing-toolkit' ) ),
+                'validation_error' => array( 'type' => 'error', 'text' => $result ?: __( 'Validation failed.', 'learndash-testing-toolkit' ) ),
             );
             
             if ( isset( $messages[ $message_type ] ) ) {
@@ -374,22 +433,50 @@ class LDTT_Admin_Interface {
     }
     
     /**
-     * Render users tab - Complete with all sections
+     * ENHANCED: Render users tab with use_existing option
      */
     private function render_users_tab() {
+        // Get current user count for display
+        $existing_user_count = count( get_users( array( 'role__not_in' => array( 'administrator' ), 'fields' => 'ID' ) ) );
+        
         ?>
         <div id="users" class="tab-content">
             <h3><?php esc_html_e( 'User Management', 'learndash-testing-toolkit' ); ?></h3>
             
-            <!-- Create and Enroll Users Section -->
+            <!-- ENHANCED: Create and Enroll Users Section with Use Existing Option -->
             <div class="ldtt-section">
                 <h4><?php esc_html_e( 'Create and Enroll Users', 'learndash-testing-toolkit' ); ?></h4>
+                <p class="description">
+                    <?php printf( 
+                        esc_html__( 'Currently %d existing users available (excluding administrators)', 'learndash-testing-toolkit' ),
+                        $existing_user_count
+                    ); ?>
+                </p>
                 <form method="post" class="ldtt-form">
                     <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
                     <table class="form-table">
                         <tr>
+                            <th><?php esc_html_e( 'User Source', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <label>
+                                    <input type="radio" name="user_source" value="create_new" checked />
+                                    <?php esc_html_e( 'Create New Users', 'learndash-testing-toolkit' ); ?>
+                                </label><br>
+                                <label>
+                                    <input type="radio" name="user_source" value="use_existing" />
+                                    <?php esc_html_e( 'Use Existing Users', 'learndash-testing-toolkit' ); ?>
+                                </label>
+                                <p class="description"><?php esc_html_e( 'Choose whether to create new users or enroll existing users', 'learndash-testing-toolkit' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
                             <th><?php esc_html_e( 'Number of Users', 'learndash-testing-toolkit' ); ?></th>
-                            <td><input type="number" name="count" value="10" min="1" max="100" /></td>
+                            <td>
+                                <input type="number" name="count" value="10" min="1" max="300" />
+                                <p class="description" id="user-count-help">
+                                    <?php esc_html_e( 'Number of users to create or enroll', 'learndash-testing-toolkit' ); ?>
+                                </p>
+                            </td>
                         </tr>
                         <tr>
                             <th><?php esc_html_e( 'Course ID', 'learndash-testing-toolkit' ); ?></th>
@@ -397,8 +484,10 @@ class LDTT_Admin_Interface {
                         </tr>
                     </table>
                     <button type="submit" name="ldtt_command" value="enrollment" class="button button-primary">
-                        <?php esc_html_e( 'Create & Enroll Users', 'learndash-testing-toolkit' ); ?>
+                        <?php esc_html_e( 'Process Users', 'learndash-testing-toolkit' ); ?>
                     </button>
+                    <!-- Hidden field to pass use_existing flag -->
+                    <input type="hidden" name="use_existing_users" value="0" id="use_existing_flag" />
                 </form>
             </div>
 
@@ -540,6 +629,29 @@ class LDTT_Admin_Interface {
 
         <script>
         jQuery(document).ready(function($) {
+            // ENHANCED: Handle user source selection
+            $('input[name="user_source"]').on('change', function() {
+                var useExisting = $(this).val() === 'use_existing';
+                var $countInput = $('input[name="count"]');
+                var $helpText = $('#user-count-help');
+                var $hiddenFlag = $('#use_existing_flag');
+                
+                if (useExisting) {
+                    $countInput.attr('max', <?php echo $existing_user_count; ?>);
+                    $helpText.html('<?php printf( esc_js( __( "Number of existing users to enroll (max %d available)", "learndash-testing-toolkit" ) ), $existing_user_count ); ?>');
+                    $hiddenFlag.val('1');
+                    
+                    // Validate current value
+                    if (parseInt($countInput.val()) > <?php echo $existing_user_count; ?>) {
+                        $countInput.val(<?php echo min( 10, $existing_user_count ); ?>);
+                    }
+                } else {
+                    $countInput.attr('max', '300');
+                    $helpText.html('<?php esc_js_e( "Number of new users to create and enroll", "learndash-testing-toolkit" ); ?>');
+                    $hiddenFlag.val('0');
+                }
+            });
+
             // Toggle progress options when auto-progress is checked
             $('input[name="auto_progress"]').on('change', function() {
                 if ($(this).is(':checked')) {
@@ -624,13 +736,26 @@ class LDTT_Admin_Interface {
     }
     
     /**
-     * Render distribution tab - Enhanced with Safe Mode
+     * ENHANCED: Render distribution tab with improved controls
      */
     private function render_distribution_tab() {
+        $existing_user_count = count( get_users( array( 'role__not_in' => array( 'administrator' ), 'fields' => 'ID' ) ) );
+        
         ?>
         <div id="distribution" class="tab-content">
             <h3><?php esc_html_e( 'Create Users with Distribution & Progress', 'learndash-testing-toolkit' ); ?></h3>
             <p><?php esc_html_e( 'Create a realistic user base with proper distribution and course progress.', 'learndash-testing-toolkit' ); ?></p>
+            
+            <!-- ENHANCED: Show current user count -->
+            <div class="notice notice-info" style="margin-bottom: 20px;">
+                <p>
+                    <strong><?php esc_html_e( 'Current Status:', 'learndash-testing-toolkit' ); ?></strong>
+                    <?php printf( 
+                        esc_html__( '%d existing users available for assignment (excluding administrators)', 'learndash-testing-toolkit' ),
+                        $existing_user_count
+                    ); ?>
+                </p>
+            </div>
             
             <form method="post" class="ldtt-form">
                 <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
@@ -654,7 +779,7 @@ class LDTT_Admin_Interface {
                         <th><?php esc_html_e( 'Total Users', 'learndash-testing-toolkit' ); ?></th>
                         <td>
                             <input type="number" name="total_users" value="100" min="10" max="1000" />
-                            <p class="description"><?php esc_html_e( 'Total number of users to create or process from existing users', 'learndash-testing-toolkit' ); ?></p>
+                            <p class="description" id="total-users-help"><?php esc_html_e( 'Total number of users to create or process from existing users', 'learndash-testing-toolkit' ); ?></p>
                         </td>
                     </tr>
                     <tr>

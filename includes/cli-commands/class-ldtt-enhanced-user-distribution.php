@@ -161,7 +161,7 @@ class LDTT_Enhanced_User_Distribution {
         $group_leaders = array();
 
         if ( $use_existing ) {
-            // Get candidate users from existing users
+            // Get candidate users from existing users - FIXED: Properly handle user query
             $candidate_users = self::get_candidate_users( $use_existing );
             if ( empty( $candidate_users ) ) {
                 return new WP_Error( 'no_candidates', 'No suitable existing users found for group leader assignment' );
@@ -169,7 +169,7 @@ class LDTT_Enhanced_User_Distribution {
 
             // Promote existing users to group_leader role
             for ( $i = 0; $i < $count && $i < count( $candidate_users ); $i++ ) {
-                $user_id = $candidate_users[ $i ];
+                $user_id = absint( $candidate_users[ $i ] ); // FIXED: Ensure integer
                 $user = new WP_User( $user_id );
                 $user->set_role( 'group_leader' );
                 
@@ -230,7 +230,7 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Get candidate users for role assignment
+     * Get candidate users for role assignment - FIXED: Properly handle user queries
      * 
      * @param bool $use_existing
      * @return array
@@ -240,13 +240,16 @@ class LDTT_Enhanced_User_Distribution {
             return array();
         }
 
-        $users = get_users( array(
+        // FIXED: Get user IDs properly, not WP_User_Query objects
+        $user_query = new WP_User_Query( array(
             'role__not_in' => array( 'administrator' ),
             'fields' => 'ID',
             'number' => 100, // Limit to prevent memory issues
         ) );
-
-        return array_map( 'intval', $users );
+        
+        // FIXED: Access results property and ensure integers
+        $users = $user_query->get_results();
+        return is_array( $users ) ? array_map( 'absint', $users ) : array();
     }
 
     /**
@@ -274,7 +277,7 @@ class LDTT_Enhanced_User_Distribution {
 
         foreach ( $groups as $index => $group_id ) {
             $leader_index = $index % count( $group_leader_ids );
-            $leader_id = $group_leader_ids[ $leader_index ];
+            $leader_id = absint( $group_leader_ids[ $leader_index ] ); // FIXED: Ensure integer
             
             if ( self::$safe_mode ) {
                 // Use safe assignment method
@@ -300,22 +303,28 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Assign group leader safely using direct meta update
+     * Assign group leader safely using direct meta update - FIXED: Type safety
      * 
      * @param int $leader_id
      * @param int $group_id
      * @return bool
      */
     private static function assign_group_leader_safely( $leader_id, $group_id ) {
+        // FIXED: Ensure we're working with integers
+        $leader_id = absint( $leader_id );
+        $group_id = absint( $group_id );
+        
+        if ( ! $leader_id || ! $group_id ) {
+            return false;
+        }
+        
         // Use direct meta update instead of LearnDash function
         $current_admins = get_post_meta( $group_id, '_ld_group_administrators', true );
         if ( ! is_array( $current_admins ) ) {
             $current_admins = array();
         }
 
-        // Ensure we're storing integers, not objects
-        $leader_id = (int) $leader_id;
-        
+        // FIXED: Ensure we're storing integers, not objects
         if ( ! in_array( $leader_id, $current_admins ) ) {
             $current_admins[] = $leader_id;
             $result = update_post_meta( $group_id, '_ld_group_administrators', $current_admins );
@@ -339,13 +348,21 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Assign group leader with LearnDash function and fallback
+     * Assign group leader with LearnDash function and fallback - FIXED: Type safety
      * 
      * @param int $leader_id
      * @param int $group_id
      * @return bool
      */
     private static function assign_group_leader_with_fallback( $leader_id, $group_id ) {
+        // FIXED: Ensure we're working with integers
+        $leader_id = absint( $leader_id );
+        $group_id = absint( $group_id );
+        
+        if ( ! $leader_id || ! $group_id ) {
+            return false;
+        }
+        
         try {
             // Try LearnDash function first
             if ( function_exists( 'learndash_set_groups_administrators' ) ) {
@@ -354,12 +371,11 @@ class LDTT_Enhanced_User_Distribution {
                     $current_leaders = array();
                 }
                 
-                // Ensure we pass integers, not user objects
-                $leader_id = (int) $leader_id;
+                // FIXED: Ensure we pass integers, not user objects
                 $current_leaders[] = $leader_id;
                 
                 // Clean the array to ensure only integers
-                $current_leaders = array_map( 'intval', $current_leaders );
+                $current_leaders = array_map( 'absint', $current_leaders );
                 $current_leaders = array_unique( $current_leaders );
                 
                 $result = learndash_set_groups_administrators( $group_id, $current_leaders );
@@ -434,7 +450,7 @@ class LDTT_Enhanced_User_Distribution {
             }
 
             for ( $i = 0; $i < $count && $i < count( $candidate_users ); $i++ ) {
-                $user_id = $candidate_users[ $i ];
+                $user_id = absint( $candidate_users[ $i ] ); // FIXED: Ensure integer
                 
                 // Skip if already assigned as group leader
                 if ( in_array( $user_id, self::$created_group_leaders ) ) {
@@ -523,7 +539,7 @@ class LDTT_Enhanced_User_Distribution {
             }
 
             for ( $i = 0; $i < $count && $i < count( $candidate_users ); $i++ ) {
-                $user_id = $candidate_users[ $i ];
+                $user_id = absint( $candidate_users[ $i ] ); // FIXED: Ensure integer
                 
                 // Skip if already assigned as group leader or member
                 if ( in_array( $user_id, self::$created_group_leaders ) ) {
@@ -596,12 +612,20 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Create progress for a user in a course
+     * Create progress for a user in a course - FIXED: Parameter validation
      * 
      * @param int $user_id
      * @param int $course_id
      */
     private static function create_progress_for_user( $user_id, $course_id ) {
+        // FIXED: Ensure we pass integers to progress manager
+        $user_id = absint( $user_id );
+        $course_id = absint( $course_id );
+        
+        if ( ! $user_id || ! $course_id ) {
+            return false;
+        }
+        
         if ( class_exists( 'LDTT_Progress_Manager' ) ) {
             LDTT_Progress_Manager::create_realistic_progress( $user_id, $course_id );
         } else {
@@ -611,12 +635,20 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Create basic progress for a user (fallback method)
+     * Create basic progress for a user (fallback method) - FIXED: Parameter validation
      * 
      * @param int $user_id
      * @param int $course_id
      */
     private static function create_basic_progress( $user_id, $course_id ) {
+        // FIXED: Ensure we're working with integers
+        $user_id = absint( $user_id );
+        $course_id = absint( $course_id );
+        
+        if ( ! $user_id || ! $course_id ) {
+            return false;
+        }
+        
         // Get course lessons
         $lessons = get_posts( array(
             'post_type' => learndash_get_post_type_slug( 'lesson' ),
@@ -765,11 +797,12 @@ class LDTT_Enhanced_User_Distribution {
         // Check for admin input if no CLI arguments provided
         if ( empty( $args ) && empty( $assoc_args ) ) {
             $assoc_args = array(
-                'course_id'    => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
-                'all_courses'  => isset( $_POST['all_courses'] ) ? true : false,
-                'overwrite'    => isset( $_POST['overwrite'] ) ? true : false,
-                'min_progress' => isset( $_POST['min_progress'] ) ? intval( $_POST['min_progress'] ) : 25,
-                'max_progress' => isset( $_POST['max_progress'] ) ? intval( $_POST['max_progress'] ) : 100,
+                'course_id'       => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
+                'all_courses'     => isset( $_POST['all_courses'] ) ? true : false,
+                'overwrite'       => isset( $_POST['overwrite'] ) ? true : false,
+                'min_progress'    => isset( $_POST['min_progress'] ) ? intval( $_POST['min_progress'] ) : 25,
+                'max_progress'    => isset( $_POST['max_progress'] ) ? intval( $_POST['max_progress'] ) : 100,
+                'user_percentage' => isset( $_POST['user_percentage'] ) ? floatval( $_POST['user_percentage'] ) : 100,
             );
         }
 
@@ -778,6 +811,7 @@ class LDTT_Enhanced_User_Distribution {
         $overwrite = isset( $assoc_args['overwrite'] ) && $assoc_args['overwrite'];
         $min_progress = LDTT_Helper::validate_positive_int( $assoc_args['min_progress'] ?? 25, 25, 100 );
         $max_progress = LDTT_Helper::validate_positive_int( $assoc_args['max_progress'] ?? 100, $min_progress, 100 );
+        $user_percentage = floatval( $assoc_args['user_percentage'] ?? 100 );
 
         if ( ! $all_courses && ! $course_id ) {
             $message = 'Either --course_id or --all_courses must be specified.';
@@ -797,11 +831,19 @@ class LDTT_Enhanced_User_Distribution {
             $users = self::get_enrolled_users_for_course( $course_id );
             $course_title = get_the_title( $course_id );
             
+            // Apply user percentage filter
+            if ( $user_percentage < 100 && ! empty( $users ) ) {
+                $users_to_process = round( count( $users ) * ( $user_percentage / 100 ) );
+                shuffle( $users );
+                $users = array_slice( $users, 0, $users_to_process );
+            }
+            
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::line( "Processing course: {$course_title} (ID: {$course_id}) - " . count( $users ) . " enrolled users" );
+                WP_CLI::line( "Processing course: {$course_title} (ID: {$course_id}) - " . count( $users ) . " users selected" );
             }
 
             foreach ( $users as $user_id ) {
+                $user_id = absint( $user_id ); // FIXED: Ensure integer
                 $total_users_processed++;
                 
                 // Check if user already has progress
@@ -823,7 +865,8 @@ class LDTT_Enhanced_User_Distribution {
             }
         }
 
-        $message = "Processed {$total_users_processed} enrolled users, added progress to {$total_progress_added} users.";
+        $percentage_text = $user_percentage < 100 ? " ({$user_percentage}% of users)" : "";
+        $message = "Processed {$total_users_processed} enrolled users{$percentage_text}, added progress to {$total_progress_added} users.";
         
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
             WP_CLI::success( $message );
@@ -867,7 +910,7 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Get enrolled users for a specific course
+     * Get enrolled users for a specific course - FIXED: Return proper array
      * 
      * @param int $course_id
      * @return array
@@ -875,7 +918,8 @@ class LDTT_Enhanced_User_Distribution {
     private static function get_enrolled_users_for_course( $course_id ) {
         // Try LearnDash function first
         if ( function_exists( 'learndash_get_users_for_course' ) ) {
-            return learndash_get_users_for_course( $course_id );
+            $users = learndash_get_users_for_course( $course_id );
+            return is_array( $users ) ? array_map( 'absint', $users ) : array();
         }
         
         // Fallback method
@@ -901,6 +945,14 @@ class LDTT_Enhanced_User_Distribution {
      * @param int $group_id Group ID.
      */
     private static function enroll_user_in_group( $user_id, $group_id ) {
+        // FIXED: Ensure integers
+        $user_id = absint( $user_id );
+        $group_id = absint( $group_id );
+        
+        if ( ! $user_id || ! $group_id ) {
+            return false;
+        }
+        
         if ( function_exists( 'ld_update_group_access' ) ) {
             ld_update_group_access( $user_id, $group_id, false );
         } else {
