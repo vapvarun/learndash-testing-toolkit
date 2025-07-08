@@ -1,0 +1,70 @@
+{
+    "name": "vapvarun/learndash-testing-toolkit",
+    "description": "A comprehensive toolkit for testing LearnDash courses, lessons, topics, quizzes, and user management with realistic data distribution and progress tracking.",
+    "type": "wordpress-plugin",
+    "keywords": [
+        "wordpress",
+        "learndash",
+        "testing",
+        "cli",
+        "education",
+        "lms"
+    ],
+    "homepage": "https://github.com/vapvarun/learndash-testing-toolkit",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "vapvarun",
+            "email": "vapvarun@gmail.com",
+            "homepage": "https://github.com/vapvarun"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/vapvarun/learndash-testing-toolkit/issues",
+        "source": "https://github.com/vapvarun/learndash-testing-toolkit",
+        "docs": "https://github.com/vapvarun/learndash-testing-toolkit/wiki"
+    },
+    "require": {
+        "php": ">=7.4",
+        "composer/installers": "^1.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0",
+        "wp-coding-standards/wpcs": "^2.3",
+        "phpcompatibility/phpcompatibility-wp": "^2.1",
+        "dealerdirect/phpcodesniffer-composer-installer": "^0.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "LDTT\\": "includes/"
+        },
+        "files": [
+            "includes/functions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "LDTT\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "phpcs": "phpcs --standard=WordPress includes/ learndash-testing-toolkit.php",
+        "phpcbf": "phpcbf --standard=WordPress includes/ learndash-testing-toolkit.php",
+        "phpunit": "phpunit",
+        "test": [
+            "@phpcs",
+            "@phpunit"
+        ],
+        "fix": "@phpcbf"
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/installers": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        },
+        "sort-packages": true
+    },
+    "extra": {
+        "installer-name": "learndash-testing-toolkit"
+    }
+}

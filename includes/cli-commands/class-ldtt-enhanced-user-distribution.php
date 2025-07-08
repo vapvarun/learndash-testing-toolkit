@@ -220,7 +220,12 @@ class LDTT_Enhanced_User_Distribution {
 
             // Create course progress if requested
             if ( $create_progress ) {
-                self::create_course_progress( $user_id, $course_id );
+                if ( class_exists( 'LDTT_Progress_Manager' ) ) {
+                    LDTT_Progress_Manager::create_realistic_progress( $user_id, $course_id );
+                } else {
+                    // Fallback to basic progress creation
+                    self::create_basic_progress( $user_id, $course_id );
+                }
             }
 
             $user_ids[] = $user_id;
@@ -279,53 +284,17 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Create course progress for a user.
+     * Get available courses.
      *
-     * @param int $user_id User ID.
-     * @param int $course_id Course ID.
+     * @return array Array of course IDs.
      */
-    private static function create_course_progress( $user_id, $course_id ) {
-        // Get course lessons
-        $lessons = learndash_get_course_lessons_list( $course_id );
-        
-        if ( empty( $lessons ) ) {
-            return;
-        }
-
-        // Randomly complete some lessons (25% to 100%)
-        $completion_rate = wp_rand( 25, 100 );
-        $lessons_to_complete = round( count( $lessons ) * ( $completion_rate / 100 ) );
-
-        // Shuffle lessons and complete the first N
-        shuffle( $lessons );
-        $completed_lessons = array_slice( $lessons, 0, $lessons_to_complete );
-
-        foreach ( $completed_lessons as $lesson ) {
-            if ( isset( $lesson['post'] ) ) {
-                $lesson_id = $lesson['post']->ID;
-                
-                // Mark lesson as completed
-                learndash_process_mark_complete( $user_id, $lesson_id, false, $course_id );
-                
-                // Get lesson topics and complete some of them too
-                $topics = learndash_get_topic_list( $lesson_id, $course_id );
-                if ( ! empty( $topics ) ) {
-                    $topics_to_complete = wp_rand( 0, count( $topics ) );
-                    $completed_topics = array_slice( $topics, 0, $topics_to_complete );
-                    
-                    foreach ( $completed_topics as $topic ) {
-                        learndash_process_mark_complete( $user_id, $topic->ID, false, $course_id );
-                    }
-                }
-            }
-        }
-
-        // Update course progress timestamp
-        update_user_meta( $user_id, '_ldtt_progress_created', current_time( 'timestamp' ) );
-
-        if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::line( "  - Created {$completion_rate}% progress for user {$user_id} in course {$course_id}" );
-        }
+    private static function get_available_courses() {
+        return get_posts( array(
+            'post_type'   => learndash_get_post_type_slug( 'course' ),
+            'numberposts' => -1,
+            'post_status' => 'publish',
+            'fields'      => 'ids',
+        ) );
     }
 
     /**
@@ -375,17 +344,44 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Get available courses.
-     *
-     * @return array Array of course IDs.
+     * Create basic course progress (fallback method)
+     * 
+     * @param int $user_id
+     * @param int $course_id
      */
-    private static function get_available_courses() {
-        return get_posts( array(
-            'post_type'   => learndash_get_post_type_slug( 'course' ),
+    private static function create_basic_progress( $user_id, $course_id ) {
+        // Get course lessons
+        $lessons = get_posts( array(
+            'post_type'   => learndash_get_post_type_slug( 'lesson' ),
             'numberposts' => -1,
+            'meta_key'    => 'learndash_course',
+            'meta_value'  => $course_id,
             'post_status' => 'publish',
-            'fields'      => 'ids',
         ) );
+        
+        if ( empty( $lessons ) ) {
+            return;
+        }
+
+        // Randomly complete some lessons (25% to 100%)
+        $completion_rate = wp_rand( 25, 100 );
+        $lessons_to_complete = round( count( $lessons ) * ( $completion_rate / 100 ) );
+
+        // Shuffle lessons and complete the first N
+        shuffle( $lessons );
+        $completed_lessons = array_slice( $lessons, 0, $lessons_to_complete );
+
+        foreach ( $completed_lessons as $lesson ) {
+            // Mark lesson as completed
+            learndash_process_mark_complete( $user_id, $lesson->ID, false, $course_id );
+        }
+
+        // Update course progress timestamp
+        update_user_meta( $user_id, '_ldtt_progress_created', current_time( 'timestamp' ) );
+
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::line( "  - Created {$completion_rate}% progress for user {$user_id} in course {$course_id}" );
+        }
     }
 
     /**
