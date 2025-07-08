@@ -146,6 +146,7 @@ class LDTT_Loader {
             'includes/cli-commands/class-ldtt-group-enrollment.php',
             'includes/cli-commands/class-ldtt-delete-items.php',
             'includes/cli-commands/class-ldtt-enhanced-user-distribution.php',
+            'includes/cli-commands/class-ldtt-user-specific-commands.php',
         );
 
         foreach ( $command_files as $file ) {

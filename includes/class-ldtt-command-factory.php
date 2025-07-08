@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Command Factory Class
+ * Command Factory Class - Updated with User-Specific Commands
  * 
  * @package LearnDash_Testing_Toolkit
  * @since 1.2.0
@@ -95,6 +95,25 @@ class LDTT_Command_Factory {
                 'description' => 'Add realistic progress to existing enrolled users',
                 'method' => 'assign_progress_to_enrolled',
             ),
+            // New user-specific commands
+            'add-user-progress' => array(
+                'class' => 'LDTT_Add_User_Progress',
+                'file'  => 'class-ldtt-user-specific-commands.php',
+                'title' => 'Add Progress to Specific User',
+                'description' => 'Add realistic course progress to a specific user ID',
+            ),
+            'enroll-user-courses' => array(
+                'class' => 'LDTT_Enroll_User_Courses',
+                'file'  => 'class-ldtt-user-specific-commands.php',
+                'title' => 'Enroll User in Courses',
+                'description' => 'Enroll a specific user in one or more courses',
+            ),
+            'user-info' => array(
+                'class' => 'LDTT_User_Info',
+                'file'  => 'class-ldtt-user-specific-commands.php',
+                'title' => 'User Information',
+                'description' => 'Get detailed information about a specific user',
+            ),
             'delete-items' => array(
                 'class' => 'LDTT_Delete_Items',
                 'file'  => 'class-ldtt-delete-items.php',
@@ -129,9 +148,11 @@ class LDTT_Command_Factory {
         
         foreach ( $this->commands as $command_name => $command_data ) {
             if ( class_exists( $command_data['class'] ) ) {
+                $method = isset( $command_data['method'] ) ? $command_data['method'] : 'handle';
+                
                 WP_CLI::add_command(
                     'ldtt ' . $command_name,
-                    array( $command_data['class'], 'handle' ),
+                    array( $command_data['class'], $method ),
                     array(
                         'shortdesc' => $command_data['description'],
                     )
@@ -162,6 +183,7 @@ class LDTT_Command_Factory {
         
         $command_data = $this->commands[ $command_name ];
         $class_name = $command_data['class'];
+        $method = isset( $command_data['method'] ) ? $command_data['method'] : 'handle';
         
         if ( ! class_exists( $class_name ) ) {
             return array(
@@ -170,10 +192,10 @@ class LDTT_Command_Factory {
             );
         }
         
-        if ( ! method_exists( $class_name, 'handle' ) ) {
+        if ( ! method_exists( $class_name, $method ) ) {
             return array(
                 'success' => false,
-                'message' => "Command handler not found in class: {$class_name}",
+                'message' => "Command method '{$method}' not found in class: {$class_name}",
             );
         }
         
@@ -181,13 +203,18 @@ class LDTT_Command_Factory {
             LDTT_Logger::info( "Executing command: {$command_name}", array(
                 'args' => $args,
                 'assoc_args' => $assoc_args,
+                'method' => $method,
             ) );
             
-            $result = call_user_func( array( $class_name, 'handle' ), $args, $assoc_args );
+            $result = call_user_func( array( $class_name, $method ), $args, $assoc_args );
             
             if ( is_array( $result ) ) {
                 LDTT_Logger::info( "Command completed: {$command_name}", array( 'result' => $result ) );
-                return $result;
+                return array(
+                    'success' => $result['status'] === 'success',
+                    'message' => $result['message'] ?? 'Command executed successfully',
+                    'data' => $result,
+                );
             }
             
             return array(
@@ -223,10 +250,84 @@ class LDTT_Command_Factory {
     public function get_command_info( $command_name ) {
         return isset( $this->commands[ $command_name ] ) ? $this->commands[ $command_name ] : null;
     }
+
+    /**
+     * Get user-specific commands
+     * 
+     * @return array
+     */
+    public function get_user_commands() {
+        $user_commands = array();
+        
+        foreach ( $this->commands as $command_name => $command_data ) {
+            if ( in_array( $command_name, array( 'add-user-progress', 'enroll-user-courses', 'user-info' ) ) ) {
+                $user_commands[ $command_name ] = $command_data;
+            }
+        }
+        
+        return $user_commands;
+    }
+
+    /**
+     * Validate user-specific command parameters
+     * 
+     * @param string $command_name
+     * @param array $params
+     * @return array
+     */
+    public function validate_user_command_params( $command_name, $params ) {
+        $errors = array();
+        
+        switch ( $command_name ) {
+            case 'add-user-progress':
+                if ( empty( $params['user_id'] ) || ! is_numeric( $params['user_id'] ) ) {
+                    $errors[] = 'Valid user ID is required';
+                }
+                
+                if ( $params['course_selection'] === 'specific' && empty( $params['specific_course_id'] ) ) {
+                    $errors[] = 'Course ID is required when using specific course selection';
+                }
+                
+                $min = intval( $params['min_progress'] ?? 0 );
+                $max = intval( $params['max_progress'] ?? 100 );
+                
+                if ( $min < 0 || $min > 100 || $max < 0 || $max > 100 || $min > $max ) {
+                    $errors[] = 'Progress range must be between 0-100% with min <= max';
+                }
+                break;
+                
+            case 'enroll-user-courses':
+                if ( empty( $params['user_id'] ) || ! is_numeric( $params['user_id'] ) ) {
+                    $errors[] = 'Valid user ID is required';
+                }
+                
+                if ( empty( $params['course_ids'] ) ) {
+                    $errors[] = 'Course IDs are required';
+                } else {
+                    $course_ids = explode( ',', $params['course_ids'] );
+                    foreach ( $course_ids as $id ) {
+                        $id = trim( $id );
+                        if ( ! is_numeric( $id ) || $id <= 0 ) {
+                            $errors[] = 'All course IDs must be valid positive numbers';
+                            break;
+                        }
+                    }
+                }
+                break;
+                
+            case 'user-info':
+                if ( empty( $params['user_id'] ) || ! is_numeric( $params['user_id'] ) ) {
+                    $errors[] = 'Valid user ID is required';
+                }
+                break;
+        }
+        
+        return $errors;
+    }
 }
 
 /**
- * Data Manager Class
+ * Data Manager Class - Enhanced with User-Specific Statistics
  * 
  * @package LearnDash_Testing_Toolkit
  * @since 1.2.0
@@ -449,7 +550,7 @@ class LDTT_Data_Manager {
     }
     
     /**
-     * Get test data statistics
+     * Get test data statistics - Enhanced with User-Specific Data
      * 
      * @return array
      */
@@ -458,6 +559,8 @@ class LDTT_Data_Manager {
             'posts' => array(),
             'users' => 0,
             'total_posts' => 0,
+            'user_progress' => array(),
+            'group_assignments' => array(),
         );
         
         // Get post statistics by type
@@ -483,6 +586,9 @@ class LDTT_Data_Manager {
         
         // Get user types
         $user_types = array();
+        $users_with_progress = 0;
+        $total_completion = 0;
+        
         foreach ( $users as $user ) {
             $user_type = get_user_meta( $user->ID, '_ldtt_user_type', true );
             if ( $user_type ) {
@@ -491,10 +597,120 @@ class LDTT_Data_Manager {
                 }
                 $user_types[ $user_type ]++;
             }
+            
+            // Check for progress data
+            $progress_rate = get_user_meta( $user->ID, '_ldtt_progress_completion_rate', true );
+            if ( $progress_rate ) {
+                $users_with_progress++;
+                $total_completion += $progress_rate;
+            }
         }
+        
         $stats['user_types'] = $user_types;
+        $stats['user_progress'] = array(
+            'users_with_progress' => $users_with_progress,
+            'average_completion' => $users_with_progress > 0 ? round( $total_completion / $users_with_progress, 2 ) : 0,
+        );
+        
+        // Get group assignment statistics
+        $groups = $this->get_test_posts( 'groups' );
+        $groups_with_leaders = 0;
+        $total_group_members = 0;
+        
+        foreach ( $groups as $group ) {
+            $leaders = get_post_meta( $group->ID, '_ld_group_administrators', true );
+            if ( ! empty( $leaders ) && is_array( $leaders ) ) {
+                $groups_with_leaders++;
+            }
+            
+            $members = get_post_meta( $group->ID, 'learndash_group_users_' . $group->ID, true );
+            if ( is_array( $members ) ) {
+                $total_group_members += count( $members );
+            }
+        }
+        
+        $stats['group_assignments'] = array(
+            'total_groups' => count( $groups ),
+            'groups_with_leaders' => $groups_with_leaders,
+            'total_group_members' => $total_group_members,
+            'leader_assignment_rate' => count( $groups ) > 0 ? round( ( $groups_with_leaders / count( $groups ) ) * 100, 2 ) : 0,
+        );
         
         return $stats;
+    }
+    
+    /**
+     * Get user-specific statistics
+     * 
+     * @param int $user_id
+     * @return array
+     */
+    public function get_user_statistics( $user_id ) {
+        $user = get_user_by( 'ID', $user_id );
+        if ( ! $user ) {
+            return array();
+        }
+        
+        $stats = array(
+            'user_id' => $user_id,
+            'username' => $user->user_login,
+            'is_test_user' => (bool) get_user_meta( $user_id, self::TEST_USER_META_KEY, true ),
+            'user_type' => get_user_meta( $user_id, '_ldtt_user_type', true ),
+            'enrollments' => array(),
+            'progress' => array(),
+            'group_memberships' => array(),
+        );
+        
+        // Get course enrollments
+        if ( function_exists( 'learndash_user_get_enrolled_courses' ) ) {
+            $enrolled_courses = learndash_user_get_enrolled_courses( $user_id );
+            foreach ( $enrolled_courses as $course_id ) {
+                $course_title = get_the_title( $course_id );
+                $progress_meta = get_user_meta( $user_id, '_ldtt_progress_course_' . $course_id, true );
+                
+                $stats['enrollments'][ $course_id ] = array(
+                    'title' => $course_title,
+                    'has_progress' => ! empty( $progress_meta ),
+                    'completion_rate' => $progress_meta['completion_rate'] ?? null,
+                );
+            }
+        }
+        
+        // Get group memberships
+        if ( function_exists( 'learndash_get_users_group_ids' ) ) {
+            $group_ids = learndash_get_users_group_ids( $user_id );
+            foreach ( $group_ids as $group_id ) {
+                $group_title = get_the_title( $group_id );
+                $is_leader = $this->is_user_group_leader( $user_id, $group_id );
+                
+                $stats['group_memberships'][ $group_id ] = array(
+                    'title' => $group_title,
+                    'role' => $is_leader ? 'leader' : 'member',
+                );
+            }
+        }
+        
+        // Calculate progress statistics
+        $progress_rates = array_filter( array_column( $stats['enrollments'], 'completion_rate' ) );
+        $stats['progress'] = array(
+            'total_courses' => count( $stats['enrollments'] ),
+            'courses_with_progress' => count( $progress_rates ),
+            'average_completion' => ! empty( $progress_rates ) ? round( array_sum( $progress_rates ) / count( $progress_rates ), 2 ) : 0,
+        );
+        
+        return $stats;
+    }
+    
+    /**
+     * Check if user is a group leader
+     * 
+     * @param int $user_id
+     * @param int $group_id
+     * @return bool
+     */
+    private function is_user_group_leader( $user_id, $group_id ) {
+        $group_leaders = get_post_meta( $group_id, '_ld_group_administrators', true );
+        return is_array( $group_leaders ) && in_array( $user_id, $group_leaders );
     }
     
     /**

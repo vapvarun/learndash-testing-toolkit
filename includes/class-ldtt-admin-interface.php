@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Admin Interface Class
+ * Admin Interface Class - Complete and Fixed
  * 
  * @package LearnDash_Testing_Toolkit
  * @since 1.2.0
@@ -374,29 +374,225 @@ class LDTT_Admin_Interface {
     }
     
     /**
-     * Render users tab
+     * Render users tab - Complete with all sections
      */
     private function render_users_tab() {
         ?>
         <div id="users" class="tab-content">
-            <h3><?php esc_html_e( 'Create and Enroll Users', 'learndash-testing-toolkit' ); ?></h3>
-            <form method="post" class="ldtt-form">
-                <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
-                <table class="form-table">
-                    <tr>
-                        <th><?php esc_html_e( 'Number of Users', 'learndash-testing-toolkit' ); ?></th>
-                        <td><input type="number" name="count" value="10" min="1" max="100" /></td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Course ID', 'learndash-testing-toolkit' ); ?></th>
-                        <td><input type="number" name="course_id" placeholder="<?php esc_attr_e( 'Enter course ID', 'learndash-testing-toolkit' ); ?>" required /></td>
-                    </tr>
-                </table>
-                <button type="submit" name="ldtt_command" value="enrollment" class="button button-primary">
-                    <?php esc_html_e( 'Create & Enroll Users', 'learndash-testing-toolkit' ); ?>
-                </button>
-            </form>
+            <h3><?php esc_html_e( 'User Management', 'learndash-testing-toolkit' ); ?></h3>
+            
+            <!-- Create and Enroll Users Section -->
+            <div class="ldtt-section">
+                <h4><?php esc_html_e( 'Create and Enroll Users', 'learndash-testing-toolkit' ); ?></h4>
+                <form method="post" class="ldtt-form">
+                    <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
+                    <table class="form-table">
+                        <tr>
+                            <th><?php esc_html_e( 'Number of Users', 'learndash-testing-toolkit' ); ?></th>
+                            <td><input type="number" name="count" value="10" min="1" max="100" /></td>
+                        </tr>
+                        <tr>
+                            <th><?php esc_html_e( 'Course ID', 'learndash-testing-toolkit' ); ?></th>
+                            <td><input type="number" name="course_id" placeholder="<?php esc_attr_e( 'Enter course ID', 'learndash-testing-toolkit' ); ?>" required /></td>
+                        </tr>
+                    </table>
+                    <button type="submit" name="ldtt_command" value="enrollment" class="button button-primary">
+                        <?php esc_html_e( 'Create & Enroll Users', 'learndash-testing-toolkit' ); ?>
+                    </button>
+                </form>
+            </div>
+
+            <hr style="margin: 30px 0;">
+
+            <!-- Add Progress to Specific User Section -->
+            <div class="ldtt-section">
+                <h4><?php esc_html_e( 'Add Progress to Specific User', 'learndash-testing-toolkit' ); ?></h4>
+                <p class="description"><?php esc_html_e( 'Add realistic course progress to a specific user ID.', 'learndash-testing-toolkit' ); ?></p>
+                <form method="post" class="ldtt-form">
+                    <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
+                    <table class="form-table">
+                        <tr>
+                            <th><?php esc_html_e( 'User ID', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <input type="number" name="user_id" placeholder="<?php esc_attr_e( 'Enter user ID', 'learndash-testing-toolkit' ); ?>" required />
+                                <p class="description"><?php esc_html_e( 'The ID of the user to add progress for', 'learndash-testing-toolkit' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php esc_html_e( 'Course Selection', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <label>
+                                    <input type="radio" name="course_selection" value="specific" checked />
+                                    <?php esc_html_e( 'Specific Course', 'learndash-testing-toolkit' ); ?>
+                                </label><br>
+                                <input type="number" name="specific_course_id" placeholder="<?php esc_attr_e( 'Course ID', 'learndash-testing-toolkit' ); ?>" style="margin: 5px 0 10px 25px;" />
+                                <br>
+                                <label>
+                                    <input type="radio" name="course_selection" value="enrolled" />
+                                    <?php esc_html_e( 'All Enrolled Courses', 'learndash-testing-toolkit' ); ?>
+                                </label>
+                                <p class="description"><?php esc_html_e( 'Choose to add progress to a specific course or all courses the user is enrolled in', 'learndash-testing-toolkit' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php esc_html_e( 'Progress Range', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <label><?php esc_html_e( 'Min:', 'learndash-testing-toolkit' ); ?> 
+                                    <input type="number" name="min_progress" value="25" min="0" max="100" style="width: 80px;" />%
+                                </label>
+                                <label style="margin-left: 15px;"><?php esc_html_e( 'Max:', 'learndash-testing-toolkit' ); ?> 
+                                    <input type="number" name="max_progress" value="100" min="0" max="100" style="width: 80px;" />%
+                                </label>
+                                <p class="description"><?php esc_html_e( 'Random completion percentage will be chosen within this range', 'learndash-testing-toolkit' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php esc_html_e( 'Options', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="overwrite_existing" value="1" />
+                                    <?php esc_html_e( 'Overwrite existing progress', 'learndash-testing-toolkit' ); ?>
+                                </label><br>
+                                <label>
+                                    <input type="checkbox" name="include_quizzes" value="1" checked />
+                                    <?php esc_html_e( 'Include quiz completions', 'learndash-testing-toolkit' ); ?>
+                                </label><br>
+                                <label>
+                                    <input type="checkbox" name="realistic_timestamps" value="1" checked />
+                                    <?php esc_html_e( 'Use realistic timestamps', 'learndash-testing-toolkit' ); ?>
+                                </label>
+                            </td>
+                        </tr>
+                    </table>
+                    <button type="submit" name="ldtt_command" value="add-user-progress" class="button button-primary">
+                        <?php esc_html_e( 'Add Progress to User', 'learndash-testing-toolkit' ); ?>
+                    </button>
+                </form>
+            </div>
+
+            <hr style="margin: 30px 0;">
+
+            <!-- Enroll Specific User in Course Section -->
+            <div class="ldtt-section">
+                <h4><?php esc_html_e( 'Enroll Specific User in Course', 'learndash-testing-toolkit' ); ?></h4>
+                <p class="description"><?php esc_html_e( 'Enroll a specific user in one or more courses.', 'learndash-testing-toolkit' ); ?></p>
+                <form method="post" class="ldtt-form">
+                    <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
+                    <table class="form-table">
+                        <tr>
+                            <th><?php esc_html_e( 'User ID', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <input type="number" name="user_id" placeholder="<?php esc_attr_e( 'Enter user ID', 'learndash-testing-toolkit' ); ?>" required />
+                                <p class="description"><?php esc_html_e( 'The ID of the user to enroll', 'learndash-testing-toolkit' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php esc_html_e( 'Course IDs', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <input type="text" name="course_ids" placeholder="<?php esc_attr_e( 'e.g., 123,456,789', 'learndash-testing-toolkit' ); ?>" required />
+                                <p class="description"><?php esc_html_e( 'Comma-separated list of course IDs to enroll the user in', 'learndash-testing-toolkit' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th><?php esc_html_e( 'Auto-create Progress', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="auto_progress" value="1" />
+                                    <?php esc_html_e( 'Automatically create realistic progress after enrollment', 'learndash-testing-toolkit' ); ?>
+                                </label>
+                                <div id="progress-options" style="margin-top: 10px; display: none;">
+                                    <label><?php esc_html_e( 'Progress:', 'learndash-testing-toolkit' ); ?> 
+                                        <input type="number" name="auto_min_progress" value="25" min="0" max="100" style="width: 60px;" />% - 
+                                        <input type="number" name="auto_max_progress" value="100" min="0" max="100" style="width: 60px;" />%
+                                    </label>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                    <button type="submit" name="ldtt_command" value="enroll-user-courses" class="button button-primary">
+                        <?php esc_html_e( 'Enroll User in Courses', 'learndash-testing-toolkit' ); ?>
+                    </button>
+                </form>
+            </div>
+
+            <hr style="margin: 30px 0;">
+
+            <!-- User Information Lookup -->
+            <div class="ldtt-section">
+                <h4><?php esc_html_e( 'User Information Lookup', 'learndash-testing-toolkit' ); ?></h4>
+                <p class="description"><?php esc_html_e( 'Get detailed information about a specific user\'s enrollments and progress.', 'learndash-testing-toolkit' ); ?></p>
+                <form method="post" class="ldtt-form">
+                    <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
+                    <table class="form-table">
+                        <tr>
+                            <th><?php esc_html_e( 'User ID', 'learndash-testing-toolkit' ); ?></th>
+                            <td>
+                                <input type="number" name="user_id" placeholder="<?php esc_attr_e( 'Enter user ID', 'learndash-testing-toolkit' ); ?>" required />
+                            </td>
+                        </tr>
+                    </table>
+                    <button type="submit" name="ldtt_command" value="user-info" class="button button-secondary">
+                        <?php esc_html_e( 'Get User Information', 'learndash-testing-toolkit' ); ?>
+                    </button>
+                </form>
+            </div>
         </div>
+
+        <script>
+        jQuery(document).ready(function($) {
+            // Toggle progress options when auto-progress is checked
+            $('input[name="auto_progress"]').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#progress-options').slideDown();
+                } else {
+                    $('#progress-options').slideUp();
+                }
+            });
+
+            // Handle course selection radio buttons
+            $('input[name="course_selection"]').on('change', function() {
+                if ($(this).val() === 'specific') {
+                    $('input[name="specific_course_id"]').prop('disabled', false).focus();
+                } else {
+                    $('input[name="specific_course_id"]').prop('disabled', true);
+                }
+            });
+
+            // Validate user ID fields
+            $('input[name="user_id"]').on('blur', function() {
+                var userId = $(this).val();
+                if (userId && userId > 0) {
+                    $(this).css('border-color', '#00a32a');
+                } else {
+                    $(this).css('border-color', '#dc3232');
+                }
+            });
+
+            // Validate course IDs format
+            $('input[name="course_ids"]').on('input', function() {
+                var value = $(this).val();
+                var isValid = /^[\d,\s]+$/.test(value) || value === '';
+                
+                if (isValid || value === '') {
+                    $(this).css('border-color', '');
+                } else {
+                    $(this).css('border-color', '#dc3232');
+                }
+            });
+
+            // Progress range validation
+            $('input[name="min_progress"], input[name="max_progress"]').on('input', function() {
+                var min = parseInt($('input[name="min_progress"]').val()) || 0;
+                var max = parseInt($('input[name="max_progress"]').val()) || 100;
+                
+                if (min > max) {
+                    $(this).css('border-color', '#dc3232');
+                } else {
+                    $(this).css('border-color', '#00a32a');
+                }
+            });
+        });
+        </script>
         <?php
     }
     
@@ -428,7 +624,7 @@ class LDTT_Admin_Interface {
     }
     
     /**
-     * Render distribution tab
+     * Render distribution tab - Enhanced with Safe Mode
      */
     private function render_distribution_tab() {
         ?>
@@ -490,6 +686,19 @@ class LDTT_Admin_Interface {
                                 <?php esc_html_e( 'Generate realistic course progress (25-100% completion)', 'learndash-testing-toolkit' ); ?>
                             </label>
                             <p class="description"><?php esc_html_e( 'Create varied progress levels for enrolled users', 'learndash-testing-toolkit' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e( 'Safe Group Creation', 'learndash-testing-toolkit' ); ?></th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="safe_group_creation" value="1" checked />
+                                <?php esc_html_e( 'Use enhanced safe mode for group leader creation', 'learndash-testing-toolkit' ); ?>
+                            </label>
+                            <p class="description">
+                                <?php esc_html_e( 'Recommended: Uses improved method to prevent LearnDash compatibility issues when creating group leaders', 'learndash-testing-toolkit' ); ?>
+                                <br><strong><?php esc_html_e( 'Note: This is enabled by default to fix known group leader creation bugs', 'learndash-testing-toolkit' ); ?></strong>
+                            </p>
                         </td>
                     </tr>
                 </table>
@@ -595,6 +804,23 @@ class LDTT_Admin_Interface {
                     <?php endif; ?>
                 </div>
                 
+                <?php if ( ! empty( $stats['user_progress'] ) ): ?>
+                <div class="ldtt-stat-card" style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 4px;">
+                    <h3><?php esc_html_e( 'User Progress', 'learndash-testing-toolkit' ); ?></h3>
+                    <p><?php esc_html_e( 'Users with Progress:', 'learndash-testing-toolkit' ); ?> <strong><?php echo esc_html( $stats['user_progress']['users_with_progress'] ); ?></strong></p>
+                    <p><?php esc_html_e( 'Average Completion:', 'learndash-testing-toolkit' ); ?> <strong><?php echo esc_html( $stats['user_progress']['average_completion'] ); ?>%</strong></p>
+                </div>
+                <?php endif; ?>
+                
+                <?php if ( ! empty( $stats['group_assignments'] ) ): ?>
+                <div class="ldtt-stat-card" style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 4px;">
+                    <h3><?php esc_html_e( 'Group Assignments', 'learndash-testing-toolkit' ); ?></h3>
+                    <p><?php esc_html_e( 'Total Groups:', 'learndash-testing-toolkit' ); ?> <strong><?php echo esc_html( $stats['group_assignments']['total_groups'] ); ?></strong></p>
+                    <p><?php esc_html_e( 'Groups with Leaders:', 'learndash-testing-toolkit' ); ?> <strong><?php echo esc_html( $stats['group_assignments']['groups_with_leaders'] ); ?></strong></p>
+                    <p><?php esc_html_e( 'Leader Assignment Rate:', 'learndash-testing-toolkit' ); ?> <strong><?php echo esc_html( $stats['group_assignments']['leader_assignment_rate'] ); ?>%</strong></p>
+                </div>
+                <?php endif; ?>
+                
             </div>
         </div>
         <?php
@@ -630,6 +856,16 @@ class LDTT_Admin_Interface {
                         </td>
                     </tr>
                     <tr>
+                        <th><?php esc_html_e( 'Default Safe Mode', 'learndash-testing-toolkit' ); ?></th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="ldtt_settings[default_safe_mode]" value="1" <?php checked( $settings['default_safe_mode'] ?? true ); ?> />
+                                <?php esc_html_e( 'Enable safe mode by default for group leader creation', 'learndash-testing-toolkit' ); ?>
+                            </label>
+                            <p class="description"><?php esc_html_e( 'Recommended: Prevents LearnDash compatibility issues with group leader assignment', 'learndash-testing-toolkit' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th><?php esc_html_e( 'Cleanup on Uninstall', 'learndash-testing-toolkit' ); ?></th>
                         <td>
                             <label>
@@ -656,6 +892,7 @@ class LDTT_Admin_Interface {
         
         $settings = array(
             'log_level' => sanitize_text_field( $_POST['ldtt_settings']['log_level'] ?? 'INFO' ),
+            'default_safe_mode' => isset( $_POST['ldtt_settings']['default_safe_mode'] ),
             'cleanup_on_uninstall' => isset( $_POST['ldtt_settings']['cleanup_on_uninstall'] ),
         );
         
