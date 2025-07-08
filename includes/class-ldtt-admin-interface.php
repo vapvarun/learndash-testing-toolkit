@@ -111,12 +111,22 @@ class LDTT_Admin_Interface {
         if ( ! $core ) {
             return array( 'success' => false, 'message' => 'Core not available' );
         }
-        
+
         $command_factory = $core->get_component( 'command_factory' );
         if ( ! $command_factory ) {
             return array( 'success' => false, 'message' => 'Command factory not available' );
         }
-        
+
+        // Process user mode for enhanced distribution
+        if ( $command === 'enhanced-user-distribution' && isset( $_POST['user_mode'] ) ) {
+            $user_mode = sanitize_text_field( $_POST['user_mode'] );
+            if ( $user_mode === 'use_existing' ) {
+                $_POST['use_existing'] = true;
+            } else {
+                $_POST['create_new'] = true;
+            }
+        }
+
         return $command_factory->execute_command( $command, array(), $_POST );
     }
     
@@ -431,10 +441,24 @@ class LDTT_Admin_Interface {
                 
                 <table class="form-table">
                     <tr>
-                        <th><?php esc_html_e( 'Total Users to Create', 'learndash-testing-toolkit' ); ?></th>
+                        <th><?php esc_html_e( 'User Source', 'learndash-testing-toolkit' ); ?></th>
+                        <td>
+                            <label>
+                                <input type="radio" name="user_mode" value="create_new" checked />
+                                <?php esc_html_e( 'Create New Users', 'learndash-testing-toolkit' ); ?>
+                            </label><br>
+                            <label>
+                                <input type="radio" name="user_mode" value="use_existing" />
+                                <?php esc_html_e( 'Use Existing Users (Random Assignment)', 'learndash-testing-toolkit' ); ?>
+                            </label>
+                            <p class="description"><?php esc_html_e( 'Choose whether to create new users or randomly assign roles to existing users', 'learndash-testing-toolkit' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><?php esc_html_e( 'Total Users', 'learndash-testing-toolkit' ); ?></th>
                         <td>
                             <input type="number" name="total_users" value="100" min="10" max="1000" />
-                            <p class="description"><?php esc_html_e( 'Total number of test users to create', 'learndash-testing-toolkit' ); ?></p>
+                            <p class="description"><?php esc_html_e( 'Total number of users to create or process from existing users', 'learndash-testing-toolkit' ); ?></p>
                         </td>
                     </tr>
                     <tr>

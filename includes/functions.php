@@ -16,8 +16,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  * 
  * @return LearnDash_Testing_Toolkit|null
  */
-function ldtt() {
-    return LearnDash_Testing_Toolkit::get_instance();
+if ( ! function_exists( 'ldtt' ) ) {
+    function ldtt() {
+        return LearnDash_Testing_Toolkit::get_instance();
+    }
 }
 
 /**
@@ -25,9 +27,11 @@ function ldtt() {
  * 
  * @return LDTT_Core|null
  */
-function ldtt_core() {
-    $plugin = ldtt();
-    return $plugin ? $plugin->get_core() : null;
+if ( ! function_exists( 'ldtt_core' ) ) {
+    function ldtt_core() {
+        $plugin = ldtt();
+        return $plugin ? $plugin->get_core() : null;
+    }
 }
 
 /**
@@ -36,9 +40,11 @@ function ldtt_core() {
  * @param string $component_name
  * @return object|null
  */
-function ldtt_get_component( $component_name ) {
-    $core = ldtt_core();
-    return $core ? $core->get_component( $component_name ) : null;
+if ( ! function_exists( 'ldtt_get_component' ) ) {
+    function ldtt_get_component( $component_name ) {
+        $core = ldtt_core();
+        return $core ? $core->get_component( $component_name ) : null;
+    }
 }
 
 /**
@@ -46,9 +52,11 @@ function ldtt_get_component( $component_name ) {
  * 
  * @return bool
  */
-function ldtt_is_learndash_available() {
-    $detector = ldtt_get_component( 'learndash_detector' );
-    return $detector ? $detector->is_learndash_available() : false;
+if ( ! function_exists( 'ldtt_is_learndash_available' ) ) {
+    function ldtt_is_learndash_available() {
+        $detector = ldtt_get_component( 'learndash_detector' );
+        return $detector ? $detector->is_learndash_available() : false;
+    }
 }
 
 /**
@@ -59,13 +67,15 @@ function ldtt_is_learndash_available() {
  * @param array $assoc_args
  * @return array
  */
-function ldtt_execute_command( $command, $args = array(), $assoc_args = array() ) {
-    $command_factory = ldtt_get_component( 'command_factory' );
-    if ( ! $command_factory ) {
-        return array( 'success' => false, 'message' => 'Command factory not available' );
+if ( ! function_exists( 'ldtt_execute_command' ) ) {
+    function ldtt_execute_command( $command, $args = array(), $assoc_args = array() ) {
+        $command_factory = ldtt_get_component( 'command_factory' );
+        if ( ! $command_factory ) {
+            return array( 'success' => false, 'message' => 'Command factory not available' );
+        }
+        
+        return $command_factory->execute_command( $command, $args, $assoc_args );
     }
-    
-    return $command_factory->execute_command( $command, $args, $assoc_args );
 }
 
 /**
@@ -73,9 +83,11 @@ function ldtt_execute_command( $command, $args = array(), $assoc_args = array() 
  * 
  * @return array
  */
-function ldtt_get_test_statistics() {
-    $data_manager = ldtt_get_component( 'data_manager' );
-    return $data_manager ? $data_manager->get_test_data_statistics() : array();
+if ( ! function_exists( 'ldtt_get_test_statistics' ) ) {
+    function ldtt_get_test_statistics() {
+        $data_manager = ldtt_get_component( 'data_manager' );
+        return $data_manager ? $data_manager->get_test_data_statistics() : array();
+    }
 }
 
 /**
@@ -85,16 +97,18 @@ function ldtt_get_test_statistics() {
  * @param string $type
  * @param bool $dismissible
  */
-function ldtt_add_admin_notice( $message, $type = 'info', $dismissible = true ) {
-    add_action( 'admin_notices', function() use ( $message, $type, $dismissible ) {
-        $dismissible_class = $dismissible ? 'is-dismissible' : '';
-        printf(
-            '<div class="notice notice-%s %s"><p>%s</p></div>',
-            esc_attr( $type ),
-            esc_attr( $dismissible_class ),
-            esc_html( $message )
-        );
-    } );
+if ( ! function_exists( 'ldtt_add_admin_notice' ) ) {
+    function ldtt_add_admin_notice( $message, $type = 'info', $dismissible = true ) {
+        add_action( 'admin_notices', function() use ( $message, $type, $dismissible ) {
+            $dismissible_class = $dismissible ? 'is-dismissible' : '';
+            printf(
+                '<div class="notice notice-%s %s"><p>%s</p></div>',
+                esc_attr( $type ),
+                esc_attr( $dismissible_class ),
+                esc_html( $message )
+            );
+        } );
+    }
 }
 
 /**
@@ -104,23 +118,25 @@ function ldtt_add_admin_notice( $message, $type = 'info', $dismissible = true ) 
  * @param string $level
  * @param array $context
  */
-function ldtt_log( $message, $level = 'info', $context = array() ) {
-    if ( ! class_exists( 'LDTT_Logger' ) ) {
-        return;
-    }
-    
-    switch ( strtolower( $level ) ) {
-        case 'error':
-            LDTT_Logger::error( $message, $context );
-            break;
-        case 'warning':
-            LDTT_Logger::warning( $message, $context );
-            break;
-        case 'debug':
-            LDTT_Logger::debug( $message, $context );
-            break;
-        default:
-            LDTT_Logger::info( $message, $context );
+if ( ! function_exists( 'ldtt_log' ) ) {
+    function ldtt_log( $message, $level = 'info', $context = array() ) {
+        if ( ! class_exists( 'LDTT_Logger' ) ) {
+            return;
+        }
+        
+        switch ( strtolower( $level ) ) {
+            case 'error':
+                LDTT_Logger::error( $message, $context );
+                break;
+            case 'warning':
+                LDTT_Logger::warning( $message, $context );
+                break;
+            case 'debug':
+                LDTT_Logger::debug( $message, $context );
+                break;
+            default:
+                LDTT_Logger::info( $message, $context );
+        }
     }
 }
 

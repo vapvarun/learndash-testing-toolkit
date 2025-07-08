@@ -466,21 +466,4 @@ function ldtt_init() {
 // Start the plugin
 add_action( 'plugins_loaded', 'ldtt_init', 1 );
 
-/**
- * Helper function to get main plugin instance
- * 
- * @return LearnDash_Testing_Toolkit
- */
-function ldtt() {
-    return LearnDash_Testing_Toolkit::get_instance();
-}
-
-/**
- * Helper function to get core instance
- * 
- * @return LDTT_Core|null
- */
-function ldtt_core() {
-    $plugin = ldtt();
-    return $plugin ? $plugin->get_core() : null;
-}
+// Global functions are now loaded from includes/functions.php

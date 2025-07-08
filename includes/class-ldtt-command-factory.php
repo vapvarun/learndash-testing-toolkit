@@ -88,6 +88,13 @@ class LDTT_Command_Factory {
                 'title' => 'Enhanced User Distribution',
                 'description' => 'Create users with realistic distribution and progress',
             ),
+            'assign-progress' => array(
+                'class' => 'LDTT_Enhanced_User_Distribution',
+                'file'  => 'class-ldtt-enhanced-user-distribution.php',
+                'title' => 'Assign Progress to Enrolled Users',
+                'description' => 'Add realistic progress to existing enrolled users',
+                'method' => 'assign_progress_to_enrolled',
+            ),
             'delete-items' => array(
                 'class' => 'LDTT_Delete_Items',
                 'file'  => 'class-ldtt-delete-items.php',

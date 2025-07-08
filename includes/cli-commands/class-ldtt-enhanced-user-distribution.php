@@ -344,44 +344,151 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Create basic course progress (fallback method)
-     * 
-     * @param int $user_id
-     * @param int $course_id
+     * Assign progress to existing enrolled users
+     *
+     * @param array $args
+     * @param array $assoc_args
      */
-    private static function create_basic_progress( $user_id, $course_id ) {
-        // Get course lessons
-        $lessons = get_posts( array(
-            'post_type'   => learndash_get_post_type_slug( 'lesson' ),
-            'numberposts' => -1,
-            'meta_key'    => 'learndash_course',
-            'meta_value'  => $course_id,
-            'post_status' => 'publish',
+    public static function assign_progress_to_enrolled( $args = array(), $assoc_args = array() ) {
+        // Check for admin input if no CLI arguments provided
+        if ( empty( $args ) && empty( $assoc_args ) ) {
+            $assoc_args = array(
+                'course_id'    => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
+                'all_courses'  => isset( $_POST['all_courses'] ) ? true : false,
+                'overwrite'    => isset( $_POST['overwrite'] ) ? true : false,
+                'min_progress' => isset( $_POST['min_progress'] ) ? intval( $_POST['min_progress'] ) : 25,
+                'max_progress' => isset( $_POST['max_progress'] ) ? intval( $_POST['max_progress'] ) : 100,
+            );
+        }
+
+        $course_id = ! empty( $assoc_args['course_id'] ) ? absint( $assoc_args['course_id'] ) : null;
+        $all_courses = isset( $assoc_args['all_courses'] ) && $assoc_args['all_courses'];
+        $overwrite = isset( $assoc_args['overwrite'] ) && $assoc_args['overwrite'];
+        $min_progress = LDTT_Helper::validate_positive_int( $assoc_args['min_progress'] ?? 25, 25, 100 );
+        $max_progress = LDTT_Helper::validate_positive_int( $assoc_args['max_progress'] ?? 100, $min_progress, 100 );
+
+        if ( ! $all_courses && ! $course_id ) {
+            $message = 'Either --course_id or --all_courses must be specified.';
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        // Get courses to process
+        $courses_to_process = $all_courses ? self::get_all_enrolled_courses() : array( $course_id );
+        
+        $total_users_processed = 0;
+        $total_progress_added = 0;
+
+        foreach ( $courses_to_process as $course_id ) {
+            $users = self::get_enrolled_users_for_course( $course_id );
+            $course_title = get_the_title( $course_id );
+            
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::line( "Processing course: {$course_title} (ID: {$course_id}) - {count($users)} enrolled users" );
+            }
+
+            foreach ( $users as $user_id ) {
+                $total_users_processed++;
+                
+                // Check if user already has progress
+                $existing_progress = get_user_meta( $user_id, '_ldtt_progress_created', true );
+                
+                if ( ! $existing_progress || $overwrite ) {
+                    // Create progress using existing Progress Manager or fallback
+                    if ( class_exists( 'LDTT_Progress_Manager' ) ) {
+                        $options = array(
+                            'min_completion' => $min_progress,
+                            'max_completion' => $max_progress,
+                        );
+                        LDTT_Progress_Manager::create_realistic_progress( $user_id, $course_id, $options );
+                    } else {
+                        self::create_basic_progress( $user_id, $course_id );
+                    }
+                    
+                    $total_progress_added++;
+                    
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::line( "  ✓ Added progress for user {$user_id}" );
+                    }
+                } else {
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::line( "  - User {$user_id} already has progress (use --overwrite to replace)" );
+                    }
+                }
+            }
+        }
+
+        $message = "Processed {$total_users_processed} enrolled users, added progress to {$total_progress_added} users.";
+        
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::success( $message );
+        }
+        
+        return array(
+            'status' => 'success',
+            'message' => $message,
+            'users_processed' => $total_users_processed,
+            'progress_added' => $total_progress_added,
+        );
+    }
+
+    /**
+     * Get all courses that have enrolled users
+     * 
+     * @return array
+     */
+    private static function get_all_enrolled_courses() {
+        global $wpdb;
+        
+        // Get courses that have users enrolled
+        $courses = $wpdb->get_col("
+            SELECT DISTINCT pm.meta_value
+            FROM {$wpdb->usermeta} um
+            JOIN {$wpdb->postmeta} pm ON pm.meta_key = 'learndash_course' 
+            WHERE um.meta_key LIKE '%course%progress%'
+            OR um.meta_key LIKE 'learndash_course_%'
+        ");
+        
+        // Fallback: get all courses
+        if ( empty( $courses ) ) {
+            $courses = get_posts( array(
+                'post_type' => learndash_get_post_type_slug( 'course' ),
+                'numberposts' => -1,
+                'fields' => 'ids',
+            ) );
+        }
+        
+        return array_filter( array_map( 'absint', $courses ) );
+    }
+
+    /**
+     * Get enrolled users for a specific course
+     * 
+     * @param int $course_id
+     * @return array
+     */
+    private static function get_enrolled_users_for_course( $course_id ) {
+        // Try LearnDash function first
+        if ( function_exists( 'learndash_get_users_for_course' ) ) {
+            return learndash_get_users_for_course( $course_id );
+        }
+        
+        // Fallback method
+        global $wpdb;
+        
+        $users = $wpdb->get_col( $wpdb->prepare( "
+            SELECT user_id 
+            FROM {$wpdb->usermeta} 
+            WHERE meta_key LIKE %s
+            AND meta_value LIKE %s
+        ", 
+        '%course%progress%',
+        '%' . $course_id . '%'
         ) );
         
-        if ( empty( $lessons ) ) {
-            return;
-        }
-
-        // Randomly complete some lessons (25% to 100%)
-        $completion_rate = wp_rand( 25, 100 );
-        $lessons_to_complete = round( count( $lessons ) * ( $completion_rate / 100 ) );
-
-        // Shuffle lessons and complete the first N
-        shuffle( $lessons );
-        $completed_lessons = array_slice( $lessons, 0, $lessons_to_complete );
-
-        foreach ( $completed_lessons as $lesson ) {
-            // Mark lesson as completed
-            learndash_process_mark_complete( $user_id, $lesson->ID, false, $course_id );
-        }
-
-        // Update course progress timestamp
-        update_user_meta( $user_id, '_ldtt_progress_created', current_time( 'timestamp' ) );
-
-        if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::line( "  - Created {$completion_rate}% progress for user {$user_id} in course {$course_id}" );
-        }
+        return array_map( 'absint', $users );
     }
 
     /**

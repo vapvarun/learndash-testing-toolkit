@@ -176,11 +176,17 @@ class LDTT_Loader {
             'group-leaders' => 'LDTT_Group_Leaders',
             'group-enrollment' => 'LDTT_Group_Enrollment',
             'enhanced-user-distribution' => 'LDTT_Enhanced_User_Distribution',
+            'assign-progress' => 'LDTT_Enhanced_User_Distribution',
         );
 
         foreach ( $commands as $command_name => $class_name ) {
             if ( class_exists( $class_name ) ) {
-                WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, 'handle' ) );
+                // Handle special case for assign-progress command
+                if ( $command_name === 'assign-progress' ) {
+                    WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, 'assign_progress_to_enrolled' ) );
+                } else {
+                    WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, 'handle' ) );
+                }
                 
                 if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
                     error_log( "[LDTT] Registered CLI command: ldtt {$command_name}" );

@@ -72,6 +72,7 @@ jQuery(document).ready(function($) {
         var groupLeaders = parseFloat($('input[name="group_leaders"]').val()) || 1;
         var groupMembers = parseFloat($('input[name="group_members"]').val()) || 2;
         var courseEnrolled = parseFloat($('input[name="course_enrolled"]').val()) || 5;
+        var userMode = $('input[name="user_mode"]:checked').val() || 'create_new';
         
         var leadersCount = Math.max(1, Math.round(totalUsers * (groupLeaders / 100)));
         var membersCount = Math.max(1, Math.round(totalUsers * (groupMembers / 100)));
@@ -79,12 +80,19 @@ jQuery(document).ready(function($) {
         var regularCount = totalUsers - leadersCount - membersCount - enrolledCount;
         
         var progressText = $('input[name="create_progress"]').is(':checked') ? ' with realistic progress' : '';
+        var modeText = userMode === 'use_existing' ? 'existing users will be randomly assigned as' : 'new users will be created as';
         
-        var preview = '<p><strong>Distribution Preview for ' + totalUsers + ' users:</strong></p><ul>' +
-            '<li><span style="color: #d54e21;"><strong>' + leadersCount + ' users</strong></span> → Group Leaders (with administrative access)</li>' +
-            '<li><span style="color: #2271b1;"><strong>' + membersCount + ' users</strong></span> → Group Members (enrolled in groups)</li>' +
-            '<li><span style="color: #00a32a;"><strong>' + enrolledCount + ' users</strong></span> → Course Students (enrolled in courses' + progressText + ')</li>' +
-            '<li><span style="color: #646970;"><strong>' + Math.max(0, regularCount) + ' users</strong></span> → Regular Test Users</li></ul>';
+        var preview = '<p><strong>Distribution Preview for ' + totalUsers + ' users:</strong></p>' +
+                     '<p><em>Using ' + (userMode === 'use_existing' ? 'existing users' : 'new users') + '</em></p><ul>' +
+            '<li><span style="color: #d54e21;"><strong>' + leadersCount + ' ' + modeText + '</strong></span> → Group Leaders (with administrative access)</li>' +
+            '<li><span style="color: #2271b1;"><strong>' + membersCount + ' ' + modeText + '</strong></span> → Group Members (enrolled in groups)</li>' +
+            '<li><span style="color: #00a32a;"><strong>' + enrolledCount + ' ' + modeText + '</strong></span> → Course Students (enrolled in courses' + progressText + ')</li>';
+            
+        if (userMode === 'create_new' && regularCount > 0) {
+            preview += '<li><span style="color: #646970;"><strong>' + Math.max(0, regularCount) + ' users will be created as</strong></span> → Regular Test Users</li>';
+        }
+        
+        preview += '</ul>';
         
         // Add warning if percentages don't add up properly
         var totalPercentage = groupLeaders + groupMembers + courseEnrolled;
@@ -95,6 +103,13 @@ jQuery(document).ready(function($) {
         } else if (regularCount < 0) {
             preview += '<div style="background: #f2dede; border: 1px solid #ebccd1; padding: 10px; margin-top: 10px; border-radius: 4px;">' +
                 '<strong>❌ Error:</strong> Percentages are too high. Reduce the percentages or increase total users.' +
+                '</div>';
+        }
+        
+        // Add info about existing users requirement
+        if (userMode === 'use_existing') {
+            preview += '<div style="background: #d9edf7; border: 1px solid #bce8f1; padding: 10px; margin-top: 10px; border-radius: 4px;">' +
+                '<strong>ℹ️ Note:</strong> This will randomly select from existing users (excluding administrators). If fewer than ' + totalUsers + ' users exist, all available users will be used.' +
                 '</div>';
         }
         
@@ -115,7 +130,7 @@ jQuery(document).ready(function($) {
     }
 
     // Add event listeners for distribution preview
-    $(document).on('input change', 'input[name="total_users"], input[name="group_leaders"], input[name="group_members"], input[name="course_enrolled"], input[name="create_progress"]', updateDistributionPreview);
+    $(document).on('input change', 'input[name="total_users"], input[name="group_leaders"], input[name="group_members"], input[name="course_enrolled"], input[name="create_progress"], input[name="user_mode"]', updateDistributionPreview);
 
     // Enhanced form validation for distribution tab
     $('#distribution form').on('submit', function(e) {
