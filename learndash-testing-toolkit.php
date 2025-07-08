@@ -83,6 +83,7 @@ function ldtt_admin_page() {
                 <a href="#quizzes" class="nav-tab">Quizzes</a>
                 <a href="#users" class="nav-tab">Users</a>
                 <a href="#groups" class="nav-tab">Groups</a>
+                <a href="#distribution" class="nav-tab">Distribution</a>
                 <a href="#cleanup" class="nav-tab">Cleanup</a>
             </h2>
 
@@ -253,6 +254,75 @@ function ldtt_admin_page() {
                 </form>
             </div>
 
+            <!-- Distribution Tab -->
+            <div id="distribution" class="tab-content">
+                <h3>Create Users with Distribution & Progress</h3>
+                <p>Create a realistic user base with proper distribution and course progress.</p>
+                
+                <form method="post" class="ldtt-form">
+                    <?php wp_nonce_field( 'ldtt_cli_command_action', 'ldtt_cli_command_nonce' ); ?>
+                    
+                    <table class="form-table">
+                        <tr>
+                            <th>Total Users to Create</th>
+                            <td>
+                                <input type="number" name="total_users" value="100" min="10" max="1000" />
+                                <p class="description">Total number of test users to create</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Group Leaders (%)</th>
+                            <td>
+                                <input type="number" name="group_leaders" value="1" min="0.1" max="10" step="0.1" />
+                                <p class="description">Percentage of users to assign as group leaders</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Group Members (%)</th>
+                            <td>
+                                <input type="number" name="group_members" value="2" min="0.1" max="20" step="0.1" />
+                                <p class="description">Percentage of users to enroll in groups</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Course Enrolled (%)</th>
+                            <td>
+                                <input type="number" name="course_enrolled" value="5" min="0.1" max="50" step="0.1" />
+                                <p class="description">Percentage of users to enroll in courses</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Create Course Progress</th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" name="create_progress" value="1" checked />
+                                    Generate realistic course progress (25-100% completion)
+                                </label>
+                                <p class="description">Create varied progress levels for enrolled users</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <div class="ldtt-margin-top">
+                        <h4>Distribution Preview</h4>
+                        <div id="distribution-preview" style="background: #f9f9f9; padding: 15px; border: 1px solid #ddd;">
+                            <p>Based on 100 users:</p>
+                            <ul>
+                                <li><strong>1 user</strong> will be assigned as group leaders</li>
+                                <li><strong>2 users</strong> will be enrolled in groups</li>
+                                <li><strong>5 users</strong> will be enrolled in courses with progress</li>
+                                <li><strong>92 users</strong> will be regular test users</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <p class="ldtt-margin-top">
+                        <button type="submit" name="ldtt_command" value="enhanced-user-distribution" class="button button-primary">
+                            Create Distributed User Base
+                        </button>
+                    </p>
+                </form>
+            </div>
             <!-- Cleanup Tab -->
             <div id="cleanup" class="tab-content">
                 <h3>Clean Test Data</h3>

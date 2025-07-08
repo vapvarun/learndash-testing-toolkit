@@ -55,6 +55,8 @@ class LDTT_Loader {
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-group-leaders.php';
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-group-enrollment.php';
         require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-delete-items.php';
+        require_once LDTT_PLUGIN_DIR . 'includes/cli-commands/class-ldtt-enhanced-user-distribution.php';
+        require_once LDTT_PLUGIN_DIR . 'includes/helpers/class-ldtt-progress-manager.php';
     }
 
     /**
@@ -72,6 +74,7 @@ class LDTT_Loader {
             'Course_Groups',
             'Group_Leaders',
             'Group_Enrollment',
+            'Enhanced_User_Distribution',
         );
 
         foreach ( $commands as $command ) {
