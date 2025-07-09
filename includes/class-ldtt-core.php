@@ -154,7 +154,6 @@ class LDTT_Core {
             'learndash_detector' => new LDTT_LearnDash_Detector(),
             'admin_interface'    => new LDTT_Admin_Interface(),
             'command_factory'    => new LDTT_Command_Factory(),
-            'data_manager'       => new LDTT_Data_Manager(),
             'progress_manager'   => new LDTT_Progress_Manager(),
         );
         
