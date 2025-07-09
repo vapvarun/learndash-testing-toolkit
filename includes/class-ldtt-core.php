@@ -1,10 +1,10 @@
 <?php
 
 /**
- * Main LDTT Core Class
+ * Main LDTT Core Class - Production Ready
  * 
  * @package LearnDash_Testing_Toolkit
- * @version 1.2.0
+ * @version 1.2.2
  * @since 1.0.0
  */
 class LDTT_Core {
@@ -12,7 +12,7 @@ class LDTT_Core {
     /**
      * Plugin version
      */
-    const VERSION = '1.2.0';
+    const VERSION = '1.2.2';
     
     /**
      * Minimum PHP version
@@ -83,9 +83,6 @@ class LDTT_Core {
     private function init_hooks() {
         add_action( 'plugins_loaded', array( $this, 'init' ), 10 );
         add_action( 'admin_init', array( $this, 'admin_init' ) );
-        add_action( 'admin_notices', array( $this, 'admin_notices' ) );
-        
-        // Handle AJAX requests
         add_action( 'wp_ajax_ldtt_handle_action', array( $this, 'handle_ajax_action' ) );
     }
     
@@ -113,10 +110,7 @@ class LDTT_Core {
             
             $this->initialized = true;
             
-            LDTT_Logger::info( 'LDTT Core initialized successfully' );
-            
         } catch ( Exception $e ) {
-            LDTT_Logger::error( 'Failed to initialize LDTT Core: ' . $e->getMessage() );
             $this->handle_initialization_error( $e );
         }
     }
@@ -227,8 +221,6 @@ class LDTT_Core {
             $this->components['learndash_detector']->init_fallback_functions();
         }
         
-        LDTT_Logger::warning( 'LearnDash bypass mode enabled' );
-        
         wp_safe_redirect( admin_url( 'admin.php?page=ldtt-cli-commands&ldtt_message=bypass_enabled' ) );
         exit;
     }
@@ -238,8 +230,6 @@ class LDTT_Core {
      */
     private function disable_bypass_mode() {
         delete_option( 'ldtt_bypass_learndash_check' );
-        
-        LDTT_Logger::info( 'LearnDash bypass mode disabled' );
         
         wp_safe_redirect( admin_url( 'admin.php?page=ldtt-cli-commands&ldtt_message=bypass_disabled' ) );
         exit;
@@ -259,8 +249,6 @@ class LDTT_Core {
         foreach ( $options_to_delete as $option ) {
             delete_option( $option );
         }
-        
-        LDTT_Logger::info( 'Plugin settings reset' );
         
         wp_safe_redirect( admin_url( 'admin.php?page=ldtt-cli-commands&ldtt_message=settings_reset' ) );
         exit;
@@ -298,8 +286,6 @@ class LDTT_Core {
                 'success' => false,
                 'message' => $e->getMessage(),
             );
-            
-            LDTT_Logger::error( 'AJAX action failed: ' . $e->getMessage() );
         }
         
         wp_send_json( $response );
@@ -368,44 +354,6 @@ class LDTT_Core {
     }
     
     /**
-     * Display admin notices
-     */
-    public function admin_notices() {
-        // Show messages based on URL parameters
-        if ( isset( $_GET['ldtt_message'] ) ) {
-            $message_type = sanitize_text_field( $_GET['ldtt_message'] );
-            $this->show_admin_message( $message_type );
-        }
-        
-        // Show requirement notices
-        if ( isset( $this->components['learndash_detector'] ) ) {
-            $this->components['learndash_detector']->show_admin_notices();
-        }
-    }
-    
-    /**
-     * Show admin message
-     * 
-     * @param string $message_type
-     */
-    private function show_admin_message( $message_type ) {
-        $messages = array(
-            'bypass_enabled'  => array( 'type' => 'warning', 'text' => 'LearnDash bypass mode has been enabled.' ),
-            'bypass_disabled' => array( 'type' => 'success', 'text' => 'LearnDash bypass mode has been disabled.' ),
-            'settings_reset'  => array( 'type' => 'success', 'text' => 'Plugin settings have been reset.' ),
-        );
-        
-        if ( isset( $messages[ $message_type ] ) ) {
-            $message = $messages[ $message_type ];
-            printf(
-                '<div class="notice notice-%s is-dismissible"><p>%s</p></div>',
-                esc_attr( $message['type'] ),
-                esc_html( $message['text'] )
-            );
-        }
-    }
-    
-    /**
      * Enqueue admin assets
      * 
      * @param string $hook
@@ -468,7 +416,7 @@ class LDTT_Core {
 }
 
 /**
- * Requirements Checker Class
+ * Requirements Checker Class - Production Ready
  */
 class LDTT_Requirements_Checker {
     
@@ -486,7 +434,6 @@ class LDTT_Requirements_Checker {
         
         foreach ( $checks as $check => $result ) {
             if ( ! $result['passed'] ) {
-                LDTT_Logger::error( "Requirement check failed: {$check} - {$result['message']}" );
                 $this->show_requirement_error( $result['message'] );
                 return false;
             }
@@ -564,7 +511,7 @@ class LDTT_Requirements_Checker {
 }
 
 /**
- * Logger Class
+ * Logger Class - Production Ready
  */
 class LDTT_Logger {
     
@@ -588,22 +535,7 @@ class LDTT_Logger {
             return;
         }
         
-        $log_entry = sprintf(
-            '[%s] [LDTT] [%s] %s',
-            current_time( 'Y-m-d H:i:s' ),
-            $level,
-            $message
-        );
-        
-        if ( ! empty( $context ) ) {
-            $log_entry .= ' | Context: ' . wp_json_encode( $context );
-        }
-        
-        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            error_log( $log_entry );
-        }
-        
-        // Store in database for admin viewing
+        // Store in database for admin viewing only
         self::store_log_entry( $message, $level, $context );
     }
     
@@ -676,9 +608,9 @@ class LDTT_Logger {
     private static function store_log_entry( $message, $level, $context ) {
         $logs = get_option( 'ldtt_logs', array() );
         
-        // Keep only last 100 entries
-        if ( count( $logs ) >= 100 ) {
-            $logs = array_slice( $logs, -99 );
+        // Keep only last 50 entries in production
+        if ( count( $logs ) >= 50 ) {
+            $logs = array_slice( $logs, -49 );
         }
         
         $logs[] = array(
@@ -697,7 +629,7 @@ class LDTT_Logger {
      * @param int $limit
      * @return array
      */
-    public static function get_recent_logs( $limit = 50 ) {
+    public static function get_recent_logs( $limit = 25 ) {
         $logs = get_option( 'ldtt_logs', array() );
         return array_slice( array_reverse( $logs ), 0, $limit );
     }

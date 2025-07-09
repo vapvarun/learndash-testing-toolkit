@@ -1,24 +1,23 @@
 <?php
 
 /**
- * LDTT Loader Class - Updated for Production
+ * LDTT Loader Class - Production Ready
  * 
  * @package LearnDash_Testing_Toolkit
- * @since 1.2.0
+ * @since 1.2.2
  */
 class LDTT_Loader {
 
     /**
-     * Initialize the plugin by loading necessary files and CLI commands.
+     * Initialize the plugin by loading necessary files and CLI commands
      */
     public static function init() {
         // Load core classes first
         self::load_core_classes();
         
-        // Check if LearnDash is active with better detection
+        // Check if LearnDash is active
         if ( ! self::is_learndash_active() ) {
             add_action( 'admin_notices', array( __CLASS__, 'learndash_missing_notice' ) );
-            // Don't return - let the detector handle this gracefully
         }
 
         // Load helper classes
@@ -51,8 +50,6 @@ class LDTT_Loader {
             $file_path = LDTT_PLUGIN_DIR . $file;
             if ( file_exists( $file_path ) ) {
                 require_once $file_path;
-            } else {
-                error_log( "[LDTT] Core file missing: {$file}" );
             }
         }
     }
@@ -65,7 +62,7 @@ class LDTT_Loader {
             'includes/helpers/class-ldtt-helper.php',
             'includes/helpers/class-ldtt-sample-data.php',
             'includes/helpers/class-ldtt-progress-manager.php',
-            'includes/functions.php', // Global functions
+            'includes/functions.php',
         );
 
         foreach ( $helper_files as $file ) {
@@ -117,7 +114,7 @@ class LDTT_Loader {
     }
 
     /**
-     * Display notice when LearnDash is not active.
+     * Display notice when LearnDash is not active
      */
     public static function learndash_missing_notice() {
         // Only show if detector isn't handling it
@@ -131,7 +128,7 @@ class LDTT_Loader {
     }
 
     /**
-     * Include all CLI command files.
+     * Include all CLI command files
      */
     private static function include_command_files() {
         $command_files = array(
@@ -153,16 +150,12 @@ class LDTT_Loader {
             $file_path = LDTT_PLUGIN_DIR . $file;
             if ( file_exists( $file_path ) ) {
                 require_once $file_path;
-            } else {
-                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                    error_log( "[LDTT] Command file missing: {$file}" );
-                }
             }
         }
     }
 
     /**
-     * Load CLI command classes and register them with WP-CLI.
+     * Load CLI command classes and register them with WP-CLI
      */
     private static function load_cli_commands() {
         $commands = array(
@@ -177,7 +170,10 @@ class LDTT_Loader {
             'group-leaders' => 'LDTT_Group_Leaders',
             'group-enrollment' => 'LDTT_Group_Enrollment',
             'enhanced-user-distribution' => 'LDTT_Enhanced_User_Distribution',
-            'assign-progress' => array( 'LDTT_Enhanced_User_Distribution', 'assign_progress_to_enrolled' ), // FIX: Use array format
+            'assign-progress' => array( 'LDTT_Enhanced_User_Distribution', 'assign_progress_to_enrolled' ),
+            'add-user-progress' => 'LDTT_Add_User_Progress',
+            'enroll-user-courses' => 'LDTT_Enroll_User_Courses',
+            'user-info' => 'LDTT_User_Info',
         );
     
         foreach ( $commands as $command_name => $class_info ) {
@@ -188,10 +184,6 @@ class LDTT_Loader {
                 
                 if ( class_exists( $class_name ) && method_exists( $class_name, $method_name ) ) {
                     WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, $method_name ) );
-                    
-                    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                        error_log( "[LDTT] Registered CLI command: ldtt {$command_name} -> {$class_name}::{$method_name}" );
-                    }
                 }
             } else {
                 // Handle single class format
@@ -199,18 +191,11 @@ class LDTT_Loader {
                 
                 if ( class_exists( $class_name ) ) {
                     WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, 'handle' ) );
-                    
-                    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                        error_log( "[LDTT] Registered CLI command: ldtt {$command_name}" );
-                    }
-                } else {
-                    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                        error_log( "[LDTT] Command class not found: {$class_name}" );
-                    }
                 }
             }
         }
     }
+
     /**
      * Initialize hooks
      */
@@ -240,7 +225,7 @@ class LDTT_Loader {
      */
     private static function load_admin_components() {
         // Admin interface is already loaded in core classes
-        // Add any additional admin-only functionality here
+        // Add any additional admin-only functionality here if needed
     }
 
     /**
@@ -248,7 +233,7 @@ class LDTT_Loader {
      */
     private static function maybe_upgrade_database() {
         $db_version = get_option( 'ldtt_db_version', '1.0.0' );
-        $plugin_version = defined( 'LDTT_VERSION' ) ? LDTT_VERSION : '1.2.0';
+        $plugin_version = defined( 'LDTT_VERSION' ) ? LDTT_VERSION : '1.2.2';
         
         if ( version_compare( $db_version, $plugin_version, '<' ) ) {
             self::upgrade_database( $db_version, $plugin_version );
@@ -259,45 +244,8 @@ class LDTT_Loader {
      * Upgrade database if needed
      */
     private static function upgrade_database( $from_version, $to_version ) {
-        // Create any new database tables or update existing ones
-        if ( version_compare( $from_version, '1.2.0', '<' ) ) {
-            self::create_120_tables();
-        }
-        
         // Update database version
         update_option( 'ldtt_db_version', $to_version );
-        
-        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            error_log( "[LDTT] Database upgraded from {$from_version} to {$to_version}" );
-        }
-    }
-
-    /**
-     * Create database tables for version 1.2.0
-     */
-    private static function create_120_tables() {
-        global $wpdb;
-
-        $charset_collate = $wpdb->get_charset_collate();
-
-        // Create logs table if it doesn't exist
-        $logs_table = $wpdb->prefix . 'ldtt_logs';
-        $logs_sql = "CREATE TABLE IF NOT EXISTS {$logs_table} (
-            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-            timestamp datetime DEFAULT CURRENT_TIMESTAMP,
-            level varchar(20) NOT NULL DEFAULT 'INFO',
-            message text NOT NULL,
-            context longtext,
-            user_id bigint(20) unsigned DEFAULT NULL,
-            ip_address varchar(45) DEFAULT NULL,
-            PRIMARY KEY (id),
-            KEY level (level),
-            KEY timestamp (timestamp),
-            KEY user_id (user_id)
-        ) {$charset_collate};";
-
-        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-        dbDelta( $logs_sql );
     }
 
     /**
@@ -323,11 +271,6 @@ class LDTT_Loader {
     private static function handle_plugin_update() {
         // Clear any caches
         wp_cache_delete( 'ldtt_settings' );
-        
-        // Log the update
-        if ( class_exists( 'LDTT_Logger' ) ) {
-            LDTT_Logger::info( 'Plugin updated successfully' );
-        }
         
         // Set transient to show update notice
         set_transient( 'ldtt_updated', true, 30 );

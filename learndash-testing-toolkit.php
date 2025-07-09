@@ -2,8 +2,8 @@
 /**
  * Plugin Name: LearnDash Testing Toolkit
  * Plugin URI: https://github.com/vapvarun/learndash-testing-toolkit
- * Description: A comprehensive toolkit for testing LearnDash courses, lessons, topics, quizzes, and user management with realistic data distribution and progress tracking. Now with enhanced user management and bug fixes.
- * Version: 1.2.1
+ * Description: A comprehensive toolkit for testing LearnDash courses, lessons, topics, quizzes, and user management with realistic data distribution and progress tracking.
+ * Version: 1.2.2
  * Author: vapvarun
  * Author URI: https://github.com/vapvarun
  * Text Domain: learndash-testing-toolkit
@@ -27,14 +27,14 @@ define( 'LDTT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'LDTT_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
 /**
- * Main Plugin Class - Production Ready with Fixes
+ * Main Plugin Class - Production Ready
  */
 class LearnDash_Testing_Toolkit {
     
     /**
-     * Plugin version - Updated for fixes
+     * Plugin version
      */
-    const VERSION = '1.2.1';
+    const VERSION = '1.2.2';
     
     /**
      * Plugin instance
@@ -79,18 +79,13 @@ class LearnDash_Testing_Toolkit {
         if ( ! defined( 'LDTT_VERSION' ) ) {
             define( 'LDTT_VERSION', self::VERSION );
         }
-        
-        // Production mode flag
-        if ( ! defined( 'LDTT_PRODUCTION' ) ) {
-            define( 'LDTT_PRODUCTION', true );
-        }
     }
     
     /**
      * Load core files
      */
     private function load_core_files() {
-        // Load security and utility functions first
+        // Load core functions
         require_once LDTT_PLUGIN_DIR . 'includes/functions.php';
         
         // Load loader class
@@ -114,9 +109,6 @@ class LearnDash_Testing_Toolkit {
         // Add plugin action links
         add_filter( 'plugin_action_links_' . LDTT_PLUGIN_BASENAME, array( $this, 'plugin_action_links' ) );
         add_filter( 'plugin_row_meta', array( $this, 'plugin_row_meta' ), 10, 2 );
-        
-        // PRODUCTION: Add health check
-        add_action( 'wp_loaded', array( $this, 'health_check' ) );
     }
     
     /**
@@ -129,33 +121,20 @@ class LearnDash_Testing_Toolkit {
     }
     
     /**
-     * Plugin activation with enhanced error handling
+     * Plugin activation
      */
     public function activate() {
         try {
             // Check system requirements
             $this->check_system_requirements();
             
-            // Create database tables if needed
-            $this->create_database_tables();
-            
             // Set activation options
             $this->set_activation_options();
             
-            // Schedule cleanup tasks
-            $this->schedule_cleanup_tasks();
-            
-            // Log activation
-            if ( class_exists( 'LDTT_Logger' ) ) {
-                LDTT_Logger::info( 'Plugin activated successfully (Production v' . self::VERSION . ')' );
-            }
+            // Set flag for activation redirect
+            set_transient( 'ldtt_activation_redirect', true, 30 );
             
         } catch ( Exception $e ) {
-            // PRODUCTION: Handle activation errors gracefully
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[LDTT] Activation error: ' . $e->getMessage() );
-            }
-            
             deactivate_plugins( LDTT_PLUGIN_BASENAME );
             wp_die( 
                 sprintf( 
@@ -173,12 +152,8 @@ class LearnDash_Testing_Toolkit {
      */
     public function deactivate() {
         // Clear scheduled tasks
-        $this->clear_scheduled_tasks();
-        
-        // Log deactivation
-        if ( class_exists( 'LDTT_Logger' ) ) {
-            LDTT_Logger::info( 'Plugin deactivated (Production v' . self::VERSION . ')' );
-        }
+        wp_clear_scheduled_hook( 'ldtt_daily_cleanup' );
+        wp_clear_scheduled_hook( 'ldtt_weekly_health_check' );
     }
     
     /**
@@ -202,38 +177,7 @@ class LearnDash_Testing_Toolkit {
     }
     
     /**
-     * PRODUCTION: Health check for plugin components
-     */
-    public function health_check() {
-        if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
-            return;
-        }
-        
-        // Check critical components
-        $health_issues = array();
-        
-        // Check if core files exist
-        $critical_files = array(
-            'includes/class-ldtt-core.php',
-            'includes/class-ldtt-learndash-detector.php',
-            'includes/cli-commands/class-ldtt-enhanced-user-distribution.php',
-            'includes/helpers/class-ldtt-progress-manager.php',
-        );
-        
-        foreach ( $critical_files as $file ) {
-            if ( ! file_exists( LDTT_PLUGIN_DIR . $file ) ) {
-                $health_issues[] = "Missing critical file: {$file}";
-            }
-        }
-        
-        // Log health issues
-        if ( ! empty( $health_issues ) && class_exists( 'LDTT_Logger' ) ) {
-            LDTT_Logger::error( 'Health check failed: ' . implode( ', ', $health_issues ) );
-        }
-    }
-    
-    /**
-     * Check system requirements with enhanced validation
+     * Check system requirements
      */
     private function check_system_requirements() {
         // Check PHP version
@@ -256,135 +200,38 @@ class LearnDash_Testing_Toolkit {
                 )
             );
         }
-        
-        // Check memory limit
-        $memory_limit = $this->get_memory_limit();
-        if ( $memory_limit < 64 * 1024 * 1024 ) { // 64MB
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[LDTT] Warning: Low memory limit detected: ' . size_format( $memory_limit ) );
-            }
-        }
     }
     
     /**
-     * Get memory limit in bytes
-     * 
-     * @return int
-     */
-    private function get_memory_limit() {
-        $memory_limit = ini_get( 'memory_limit' );
-        
-        if ( preg_match( '/^(\d+)(.)$/', $memory_limit, $matches ) ) {
-            $number = $matches[1];
-            $suffix = strtoupper( $matches[2] );
-            
-            switch ( $suffix ) {
-                case 'G':
-                    return $number * 1024 * 1024 * 1024;
-                case 'M':
-                    return $number * 1024 * 1024;
-                case 'K':
-                    return $number * 1024;
-                default:
-                    return $number;
-            }
-        }
-        
-        return 0;
-    }
-    
-    /**
-     * Create database tables with error handling
-     */
-    private function create_database_tables() {
-        global $wpdb;
-        
-        $charset_collate = $wpdb->get_charset_collate();
-        
-        // Create logs table
-        $logs_table = $wpdb->prefix . 'ldtt_logs';
-        $logs_sql = "CREATE TABLE IF NOT EXISTS {$logs_table} (
-            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-            timestamp datetime DEFAULT CURRENT_TIMESTAMP,
-            level varchar(20) NOT NULL DEFAULT 'INFO',
-            message text NOT NULL,
-            context longtext,
-            user_id bigint(20) unsigned DEFAULT NULL,
-            ip_address varchar(45) DEFAULT NULL,
-            PRIMARY KEY (id),
-            KEY level (level),
-            KEY timestamp (timestamp),
-            KEY user_id (user_id)
-        ) {$charset_collate};";
-        
-        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-        $result = dbDelta( $logs_sql );
-        
-        // Check if table creation was successful
-        if ( $wpdb->get_var( "SHOW TABLES LIKE '{$logs_table}'" ) !== $logs_table ) {
-            throw new Exception( 'Failed to create logs table during activation' );
-        }
-    }
-    
-    /**
-     * Set activation options with production defaults
+     * Set activation options
      */
     private function set_activation_options() {
         add_option( 'ldtt_version', self::VERSION );
         add_option( 'ldtt_activation_time', current_time( 'timestamp' ) );
-        add_option( 'ldtt_settings', $this->get_production_defaults() );
-        
-        // Set flag for activation redirect
-        set_transient( 'ldtt_activation_redirect', true, 30 );
+        add_option( 'ldtt_settings', $this->get_default_settings() );
     }
     
     /**
-     * Get production-ready default settings
+     * Get default settings
      * 
      * @return array
      */
-    private function get_production_defaults() {
+    private function get_default_settings() {
         return array(
             'log_level' => 'INFO',
             'cleanup_on_uninstall' => false,
             'auto_cleanup_days' => 30,
             'max_test_posts' => 10000,
             'max_test_users' => 1000,
-            'enable_debug_mode' => false,
-            'default_safe_mode' => true, // PRODUCTION: Enable safe mode by default
+            'default_safe_mode' => true,
             'enhanced_error_handling' => true,
-            'production_mode' => true,
         );
-    }
-    
-    /**
-     * Schedule cleanup tasks
-     */
-    private function schedule_cleanup_tasks() {
-        if ( ! wp_next_scheduled( 'ldtt_daily_cleanup' ) ) {
-            wp_schedule_event( time(), 'daily', 'ldtt_daily_cleanup' );
-        }
-        
-        // PRODUCTION: Weekly health check
-        if ( ! wp_next_scheduled( 'ldtt_weekly_health_check' ) ) {
-            wp_schedule_event( time(), 'weekly', 'ldtt_weekly_health_check' );
-        }
-    }
-    
-    /**
-     * Clear scheduled tasks
-     */
-    private function clear_scheduled_tasks() {
-        wp_clear_scheduled_hook( 'ldtt_daily_cleanup' );
-        wp_clear_scheduled_hook( 'ldtt_weekly_health_check' );
     }
     
     /**
      * Clean up all plugin data
      */
     private static function cleanup_all_data() {
-        global $wpdb;
-        
         try {
             // Delete test posts
             $test_posts = get_posts( array(
@@ -409,13 +256,8 @@ class LearnDash_Testing_Toolkit {
                 wp_delete_user( $user->ID );
             }
             
-            // Drop custom tables
-            $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}ldtt_logs" );
-            
         } catch ( Exception $e ) {
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[LDTT] Cleanup error: ' . $e->getMessage() );
-            }
+            // Silent cleanup failure in production
         }
     }
     
@@ -465,7 +307,7 @@ class LearnDash_Testing_Toolkit {
     }
     
     /**
-     * Run plugin update with error handling
+     * Run plugin update
      * 
      * @param string $from_version
      */
@@ -479,18 +321,12 @@ class LearnDash_Testing_Toolkit {
                 $this->update_to_1_2_0();
             }
             
-            if ( version_compare( $from_version, '1.2.1', '<' ) ) {
-                $this->update_to_1_2_1();
-            }
-            
-            if ( class_exists( 'LDTT_Logger' ) ) {
-                LDTT_Logger::info( "Plugin updated from {$from_version} to " . self::VERSION );
+            if ( version_compare( $from_version, '1.2.2', '<' ) ) {
+                $this->update_to_1_2_2();
             }
             
         } catch ( Exception $e ) {
-            if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                error_log( '[LDTT] Update error: ' . $e->getMessage() );
-            }
+            // Silent update failure in production
         }
     }
     
@@ -498,27 +334,23 @@ class LearnDash_Testing_Toolkit {
      * Update to version 1.2.0
      */
     private function update_to_1_2_0() {
-        // Create new database tables
-        $this->create_database_tables();
-        
         // Migrate old settings
         $old_settings = get_option( 'ldtt_settings', array() );
-        $new_settings = wp_parse_args( $old_settings, $this->get_production_defaults() );
+        $new_settings = wp_parse_args( $old_settings, $this->get_default_settings() );
         update_option( 'ldtt_settings', $new_settings );
     }
     
     /**
-     * PRODUCTION: Update to version 1.2.1 (Bug fixes)
+     * Update to version 1.2.2
      */
-    private function update_to_1_2_1() {
+    private function update_to_1_2_2() {
         // Enable safe mode by default for existing installations
         $settings = get_option( 'ldtt_settings', array() );
         $settings['default_safe_mode'] = true;
-        $settings['production_mode'] = true;
         $settings['enhanced_error_handling'] = true;
         update_option( 'ldtt_settings', $settings );
         
-        // Clear any cached data that might cause issues
+        // Clear any cached data
         wp_cache_flush();
     }
     
@@ -534,11 +366,6 @@ class LearnDash_Testing_Toolkit {
                 '<a href="%s">%s</a>',
                 admin_url( 'admin.php?page=ldtt-cli-commands' ),
                 __( 'Settings', 'learndash-testing-toolkit' )
-            ),
-            'docs' => sprintf(
-                '<a href="%s" target="_blank">%s</a>',
-                'https://github.com/vapvarun/learndash-testing-toolkit/wiki',
-                __( 'Documentation', 'learndash-testing-toolkit' )
             ),
         );
         
@@ -568,11 +395,6 @@ class LearnDash_Testing_Toolkit {
                 'https://github.com/vapvarun/learndash-testing-toolkit/issues',
                 __( 'Support', 'learndash-testing-toolkit' )
             ),
-            'changelog' => sprintf(
-                '<a href="%s" target="_blank">%s</a>',
-                'https://github.com/vapvarun/learndash-testing-toolkit/releases',
-                __( 'Changelog', 'learndash-testing-toolkit' )
-            ),
         );
         
         return array_merge( $links, $row_meta );
@@ -599,27 +421,6 @@ class LearnDash_Testing_Toolkit {
             'file' => __FILE__,
             'dir' => LDTT_PLUGIN_DIR,
             'url' => LDTT_PLUGIN_URL,
-            'production' => defined( 'LDTT_PRODUCTION' ) && LDTT_PRODUCTION,
-        );
-    }
-    
-    /**
-     * PRODUCTION: Get system status for debugging
-     * 
-     * @return array
-     */
-    public function get_system_status() {
-        return array(
-            'plugin_version' => self::VERSION,
-            'php_version' => PHP_VERSION,
-            'wp_version' => get_bloginfo( 'version' ),
-            'memory_limit' => ini_get( 'memory_limit' ),
-            'memory_usage' => size_format( memory_get_usage( true ) ),
-            'learndash_active' => $this->core && method_exists( $this->core, 'get_component' ) 
-                ? $this->core->get_component( 'learndash_detector' )->is_learndash_available() 
-                : false,
-            'safe_mode_enabled' => get_option( 'ldtt_settings', array() )['default_safe_mode'] ?? true,
-            'production_mode' => defined( 'LDTT_PRODUCTION' ) && LDTT_PRODUCTION,
         );
     }
 }
@@ -634,14 +435,9 @@ function ldtt_init() {
 // Start the plugin
 add_action( 'plugins_loaded', 'ldtt_init', 1 );
 
-// PRODUCTION: Emergency deactivation check
+// Emergency deactivation check
 add_action( 'admin_init', function() {
     if ( ! class_exists( 'LDTT_Core' ) && current_user_can( 'activate_plugins' ) ) {
-        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-            error_log( '[LDTT] Emergency: Core class missing, deactivating plugin' );
-        }
         deactivate_plugins( LDTT_PLUGIN_BASENAME );
     }
 } );
-
-// Global functions are now loaded from includes/functions.php

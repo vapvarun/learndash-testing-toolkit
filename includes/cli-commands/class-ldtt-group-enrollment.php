@@ -1,101 +1,54 @@
 <?php
 
 /**
- * Updated Enrollment Command with Enhanced Parameters
+ * Group Enrollment Command - Fixed with Standard LearnDash Functions Only
+ * Creates users and enrolls them in LearnDash groups using official functions
  */
-class LDTT_Enrollment {
+class LDTT_Group_Enrollment {
 
     /**
-     * Handle the enrollment command with enhanced parameters
+     * Handle the command to enroll users into a LearnDash group
      *
-     * @param array $args
-     * @param array $assoc_args
-     * @return array
+     * @param array $args Positional arguments passed from the WP-CLI command.
+     * @param array $assoc_args Associative arguments passed from the WP-CLI command.
      */
     public static function handle( $args = array(), $assoc_args = array() ) {
         // Check for admin input if no CLI arguments are provided
         if ( empty( $args ) && empty( $assoc_args ) ) {
             $assoc_args = array(
-                'course_id'          => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
-                'count'              => isset( $_POST['count'] ) ? intval( $_POST['count'] ) : 10,
-                'use_existing'       => isset( $_POST['use_existing_users'] ) && $_POST['use_existing_users'] ? true : false,
-                'add_progress'       => isset( $_POST['add_progress'] ) ? true : false,
-                'progress_percentage' => isset( $_POST['progress_percentage'] ) ? intval( $_POST['progress_percentage'] ) : null,
-                'user_role'          => isset( $_POST['user_role'] ) ? sanitize_text_field( $_POST['user_role'] ) : 'subscriber',
-                'user_prefix'        => isset( $_POST['user_prefix'] ) ? sanitize_text_field( $_POST['user_prefix'] ) : 'student',
-                'dry_run'            => isset( $_POST['dry_run'] ) ? true : false,
-                'verbose'            => isset( $_POST['verbose'] ) ? true : false,
+                'group_name'    => isset( $_POST['group_name'] ) ? sanitize_text_field( $_POST['group_name'] ) : 'Test Group',
+                'users'         => isset( $_POST['users'] ) ? intval( $_POST['users'] ) : 10,
+                'create_group'  => isset( $_POST['create_group'] ) ? true : false,
+                'use_existing'  => isset( $_POST['use_existing'] ) ? true : false,
+                'user_prefix'   => isset( $_POST['user_prefix'] ) ? sanitize_text_field( $_POST['user_prefix'] ) : 'groupuser',
             );
         }
 
-        $course_id = ! empty( $assoc_args['course_id'] ) ? absint( $assoc_args['course_id'] ) : null;
-        $user_count = LDTT_Helper::validate_positive_int( $assoc_args['count'] ?? 10, 1, 500 );
+        $group_name = sanitize_text_field( $assoc_args['group_name'] ?? $assoc_args['group'] ?? 'Test Group' );
+        $user_count = LDTT_Helper::validate_positive_int( $assoc_args['users'] ?? 10, 1, 100 );
+        $create_group = isset( $assoc_args['create_group'] ) && $assoc_args['create_group'];
         $use_existing = isset( $assoc_args['use_existing'] ) && $assoc_args['use_existing'];
-        $add_progress = isset( $assoc_args['add_progress'] ) && $assoc_args['add_progress'];
-        $progress_percentage = isset( $assoc_args['progress_percentage'] ) ? intval( $assoc_args['progress_percentage'] ) : null;
-        $user_role = sanitize_text_field( $assoc_args['user_role'] ?? 'subscriber' );
-        $user_prefix = sanitize_text_field( $assoc_args['user_prefix'] ?? 'student' );
-        $dry_run = isset( $assoc_args['dry_run'] ) && $assoc_args['dry_run'];
-        $verbose = isset( $assoc_args['verbose'] ) && $assoc_args['verbose'];
+        $user_prefix = sanitize_text_field( $assoc_args['user_prefix'] ?? 'groupuser' );
 
-        if ( ! $course_id ) {
-            $message = 'Course ID is required.';
+        // Get or create the group
+        $group_id = self::get_or_create_group( $group_name, $create_group );
+        if ( is_wp_error( $group_id ) ) {
+            $message = $group_id->get_error_message();
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
                 WP_CLI::error( $message );
             }
             return array( 'status' => 'error', 'message' => $message );
         }
 
-        // Validate course ID
-        if ( get_post_type( $course_id ) !== learndash_get_post_type_slug( 'course' ) ) {
-            $message = "Course ID {$course_id} is not a valid course.";
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
-        }
-
-        // Validate progress percentage if provided
-        if ( $progress_percentage !== null && ( $progress_percentage < 0 || $progress_percentage > 100 ) ) {
-            $message = 'Progress percentage must be between 0 and 100.';
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
-        }
-
-        $course_title = get_the_title( $course_id );
-
-        // Show what will be done if dry run
-        if ( $dry_run ) {
-            return self::show_dry_run_preview( $course_id, $course_title, $user_count, $use_existing, $add_progress, $progress_percentage, $user_role, $user_prefix );
-        }
-
-        if ( $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::line( "Starting enrollment process..." );
-            WP_CLI::line( "Course: {$course_title} (ID: {$course_id})" );
-            WP_CLI::line( "Users to process: {$user_count}" );
-            WP_CLI::line( "Method: " . ( $use_existing ? 'Use existing users' : 'Create new users' ) );
-            WP_CLI::line( "User role: {$user_role}" );
-            if ( ! $use_existing ) {
-                WP_CLI::line( "Username prefix: {$user_prefix}" );
-            }
-            if ( $add_progress ) {
-                $progress_text = $progress_percentage ? "{$progress_percentage}%" : "random (25-85%)";
-                WP_CLI::line( "Add progress: {$progress_text}" );
-            }
-            WP_CLI::line( "" );
-        }
-
-        // Choose method based on use_existing flag
+        // Enroll users in the group
         if ( $use_existing ) {
-            $result = self::enroll_existing_users( $course_id, $user_count, $user_role, $add_progress, $progress_percentage, $verbose );
+            $user_ids = self::enroll_existing_users( $group_id, $user_count );
         } else {
-            $result = self::create_and_enroll_users( $course_id, $user_count, $user_role, $user_prefix, $add_progress, $progress_percentage, $verbose );
+            $user_ids = self::create_and_enroll_users( $group_id, $user_count, $user_prefix );
         }
 
-        if ( is_wp_error( $result ) ) {
-            $message = $result->get_error_message();
+        if ( is_wp_error( $user_ids ) ) {
+            $message = $user_ids->get_error_message();
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
                 WP_CLI::error( $message );
             }
@@ -103,85 +56,94 @@ class LDTT_Enrollment {
         }
 
         $action_text = $use_existing ? 'enrolled existing' : 'created and enrolled';
-        $progress_text = $add_progress ? ' with progress added' : '';
-        $message = count( $result['user_ids'] ) . " users successfully {$action_text} in course '{$course_title}'{$progress_text}.";
+        $message = count( $user_ids ) . " users successfully {$action_text} in group '{$group_name}'.";
         
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
             WP_CLI::success( $message );
-            if ( $verbose ) {
-                WP_CLI::line( 'User IDs: ' . implode( ', ', $result['user_ids'] ) );
-                if ( $add_progress && ! empty( $result['progress_added'] ) ) {
-                    WP_CLI::line( "Progress added to {$result['progress_added']} users" );
-                }
-            }
+            WP_CLI::line( 'Group ID: ' . $group_id );
+            WP_CLI::line( 'User IDs: ' . implode( ', ', $user_ids ) );
         }
         
         return array(
-            'status'  => 'success',
-            'message' => $message,
-            'user_ids' => $result['user_ids'],
-            'method' => $use_existing ? 'existing_users' : 'new_users',
-            'progress_added' => $result['progress_added'] ?? 0,
+            'status'   => 'success',
+            'message'  => $message,
+            'group_id' => $group_id,
+            'user_ids' => $user_ids,
+            'method'   => $use_existing ? 'existing_users' : 'new_users',
         );
     }
 
     /**
-     * Show dry run preview
+     * Get an existing group by name or create a new one
+     *
+     * @param string $group_name The name of the group.
+     * @param bool $create_if_missing Whether to create the group if not found.
+     * @return int|WP_Error The group ID on success, WP_Error on failure.
      */
-    private static function show_dry_run_preview( $course_id, $course_title, $user_count, $use_existing, $add_progress, $progress_percentage, $user_role, $user_prefix ) {
-        $preview = array(
-            'course' => array(
-                'id' => $course_id,
-                'title' => $course_title,
-            ),
-            'users' => array(
-                'count' => $user_count,
-                'method' => $use_existing ? 'existing' : 'new',
-                'role' => $user_role,
-                'prefix' => $use_existing ? 'N/A' : $user_prefix,
-            ),
-            'progress' => array(
-                'enabled' => $add_progress,
-                'percentage' => $progress_percentage ?: 'random (25-85%)',
-            ),
-        );
+    private static function get_or_create_group( $group_name, $create_if_missing = true ) {
+        // Try to find existing group using proper query
+        $existing_groups = get_posts( array(
+            'post_type'   => learndash_get_post_type_slug( 'group' ),
+            'title'       => $group_name,
+            'post_status' => 'publish',
+            'numberposts' => 1,
+            'fields'      => 'ids',
+        ) );
 
-        if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::line( "=== DRY RUN PREVIEW ===" );
-            WP_CLI::line( "Course: {$course_title} (ID: {$course_id})" );
-            WP_CLI::line( "Users: {$user_count} " . ( $use_existing ? 'existing users' : 'new users to create' ) );
-            WP_CLI::line( "Role: {$user_role}" );
-            if ( ! $use_existing ) {
-                WP_CLI::line( "Username format: {$user_prefix}_XXXXXXXX" );
-            }
-            if ( $add_progress ) {
-                $progress_text = $progress_percentage ? "{$progress_percentage}%" : "random between 25-85%";
-                WP_CLI::line( "Progress: {$progress_text}" );
-            }
-            WP_CLI::line( "" );
-            WP_CLI::line( "Run without --dry_run to execute." );
+        if ( ! empty( $existing_groups ) ) {
+            return $existing_groups[0];
         }
 
-        return array(
-            'status' => 'success',
-            'message' => 'Dry run completed',
-            'preview' => $preview,
-        );
+        if ( ! $create_if_missing ) {
+            return new WP_Error( 'group_not_found', "Group '{$group_name}' not found and creation is disabled." );
+        }
+
+        // Create new group
+        $admin_id = LDTT_Helper::get_admin_user_id();
+        if ( ! $admin_id ) {
+            return new WP_Error( 'no_admin', 'No admin user found to assign as group author.' );
+        }
+
+        $group_id = wp_insert_post( array(
+            'post_title'   => $group_name,
+            'post_type'    => learndash_get_post_type_slug( 'group' ),
+            'post_status'  => 'publish',
+            'post_content' => "Test group created by LearnDash Testing Toolkit for user enrollment.",
+            'post_author'  => $admin_id,
+            'meta_input'   => array(
+                '_ldtt_test_data' => true,
+                '_ldtt_created_time' => current_time( 'timestamp' ),
+            ),
+        ) );
+
+        if ( is_wp_error( $group_id ) ) {
+            return $group_id;
+        }
+
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::line( "Created new group: {$group_name} (ID: {$group_id})" );
+        }
+
+        return $group_id;
     }
 
     /**
-     * Enroll existing users in a course
+     * Enroll existing users in a group
+     *
+     * @param int $group_id The ID of the group.
+     * @param int $user_count The number of users to enroll.
+     * @return array|WP_Error An array of user IDs on success, WP_Error on failure.
      */
-    private static function enroll_existing_users( $course_id, $user_count, $user_role, $add_progress = false, $progress_percentage = null, $verbose = false ) {
-        // Get existing users (excluding administrators)
+    private static function enroll_existing_users( $group_id, $user_count ) {
+        // Get existing users (excluding administrators and group leaders)
         $existing_users = get_users( array(
-            'role__not_in' => array( 'administrator' ),
+            'role__not_in' => array( 'administrator', 'group_leader' ),
             'fields' => 'ID',
-            'number' => $user_count * 2, // Get more than needed for filtering
+            'number' => $user_count * 2, // Get extra for filtering
         ) );
 
         if ( empty( $existing_users ) ) {
-            return new WP_Error( 'no_existing_users', 'No existing users found to enroll.' );
+            return new WP_Error( 'no_existing_users', 'No existing users found to enroll in group.' );
         }
 
         // Convert to integers and shuffle for random selection
@@ -191,69 +153,52 @@ class LDTT_Enrollment {
         // Limit to requested count
         $users_to_enroll = array_slice( $user_ids, 0, $user_count );
         $enrolled_users = array();
-        $progress_added = 0;
 
         foreach ( $users_to_enroll as $user_id ) {
-            // Check if user is already enrolled
-            if ( self::is_user_enrolled( $user_id, $course_id ) ) {
-                if ( $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
-                    WP_CLI::line( "User {$user_id} already enrolled, skipping." );
+            // Check if user is already in this group
+            if ( self::is_user_in_group( $user_id, $group_id ) ) {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::line( "User {$user_id} already in group, skipping." );
                 }
                 continue;
             }
 
-            // Update user role if different
-            $user = new WP_User( $user_id );
-            if ( ! in_array( $user_role, $user->roles ) ) {
-                $user->set_role( $user_role );
-                if ( $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
-                    WP_CLI::line( "Updated user {$user_id} role to {$user_role}" );
-                }
-            }
-
-            // Enroll the user in the course
-            $result = ld_update_course_access( $user_id, $course_id, false );
-            
-            if ( $result !== false ) {
-                // Mark user as managed by LDTT for this operation
-                update_user_meta( $user_id, '_ldtt_enrolled_course_' . $course_id, current_time( 'timestamp' ) );
-                
+            // Enroll the user in the group
+            $result = self::enroll_user_in_group( $user_id, $group_id );
+            if ( ! is_wp_error( $result ) ) {
                 $enrolled_users[] = $user_id;
+                
+                // Mark enrollment for tracking
+                update_user_meta( $user_id, '_ldtt_enrolled_group_' . $group_id, current_time( 'timestamp' ) );
 
-                // Add progress if requested
-                if ( $add_progress ) {
-                    self::add_user_progress( $user_id, $course_id, $progress_percentage );
-                    $progress_added++;
-                }
-
-                if ( $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
                     $user = get_user_by( 'ID', $user_id );
-                    $progress_text = $add_progress ? ' with progress' : '';
-                    WP_CLI::line( "Enrolled existing user: {$user->user_login} (ID: {$user_id}){$progress_text}" );
+                    WP_CLI::line( "Enrolled existing user: {$user->user_login} (ID: {$user_id})" );
                 }
             } else {
-                if ( $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
-                    WP_CLI::warning( "Failed to enroll user ID {$user_id} in the course." );
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::warning( "Failed to enroll user ID {$user_id}: " . $result->get_error_message() );
                 }
             }
         }
 
         if ( empty( $enrolled_users ) ) {
-            return new WP_Error( 'enrollment_failed', 'No users could be enrolled. They may already be enrolled.' );
+            return new WP_Error( 'enrollment_failed', 'No users could be enrolled in the group.' );
         }
 
-        return array(
-            'user_ids' => $enrolled_users,
-            'progress_added' => $progress_added,
-        );
+        return $enrolled_users;
     }
 
     /**
-     * Create new users and enroll them in a course
+     * Create users and enroll them in a group
+     *
+     * @param int $group_id The ID of the group.
+     * @param int $user_count The number of users to create and enroll.
+     * @param string $user_prefix The prefix for usernames.
+     * @return array|WP_Error An array of user IDs on success, WP_Error on failure.
      */
-    private static function create_and_enroll_users( $course_id, $user_count, $user_role, $user_prefix, $add_progress = false, $progress_percentage = null, $verbose = false ) {
+    private static function create_and_enroll_users( $group_id, $user_count, $user_prefix = 'groupuser' ) {
         $user_ids = array();
-        $progress_added = 0;
 
         for ( $i = 1; $i <= $user_count; $i++ ) {
             $username = $user_prefix . '_' . LDTT_Helper::generate_random_string( 8 );
@@ -262,141 +207,178 @@ class LDTT_Enrollment {
             $user_id = wp_create_user( $username, wp_generate_password( 12 ), $email );
 
             if ( is_wp_error( $user_id ) ) {
-                if ( $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
                     WP_CLI::warning( "Failed to create user: {$username}" );
                 }
                 continue;
             }
 
-            // Assign the specified role to the user
-            $user = new WP_User( $user_id );
-            $user->set_role( $user_role );
-
-            // Set display name
+            // Set user details
             wp_update_user( array(
                 'ID'           => $user_id,
-                'display_name' => ucfirst( $user_prefix ) . ' ' . $i,
-                'first_name'   => ucfirst( $user_prefix ),
-                'last_name'    => $i,
+                'display_name' => 'Group Member ' . $i,
+                'first_name'   => 'Group',
+                'last_name'    => 'Member ' . $i,
             ) );
+
+            // Assign the 'subscriber' role to the user
+            $user = new WP_User( $user_id );
+            $user->set_role( 'subscriber' );
 
             // Mark as test user
             update_user_meta( $user_id, '_ldtt_test_user', true );
-            update_user_meta( $user_id, '_ldtt_user_type', 'course_enrolled' );
+            update_user_meta( $user_id, '_ldtt_user_type', 'group_member' );
 
-            // Enroll the user in the course
-            $result = ld_update_course_access( $user_id, $course_id, false );
-            if ( ! $result && $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::warning( "Failed to enroll user '{$username}' in the course." );
-            }
-
-            // Add progress if requested
-            if ( $add_progress ) {
-                self::add_user_progress( $user_id, $course_id, $progress_percentage );
-                $progress_added++;
+            // Enroll the user in the group
+            $result = self::enroll_user_in_group( $user_id, $group_id );
+            if ( is_wp_error( $result ) ) {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::warning( "Failed to enroll user '{$username}' in the group: " . $result->get_error_message() );
+                }
+                continue;
             }
 
             $user_ids[] = $user_id;
 
-            if ( $verbose && defined( 'WP_CLI' ) && WP_CLI ) {
-                $progress_text = $add_progress ? ' with progress' : '';
-                WP_CLI::line( "Created and enrolled user: {$username} (ID: {$user_id}){$progress_text}" );
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::line( "Created and enrolled user: {$username} (ID: {$user_id})" );
             }
         }
 
-        return array(
-            'user_ids' => $user_ids,
-            'progress_added' => $progress_added,
-        );
+        if ( empty( $user_ids ) ) {
+            return new WP_Error( 'no_users_created', 'No users could be created and enrolled.' );
+        }
+
+        return $user_ids;
     }
 
     /**
-     * Add progress to a user for a course using the correct approach
+     * Enroll a user in a group using standard LearnDash functions
+     *
+     * @param int $user_id The user ID.
+     * @param int $group_id The group ID.
+     * @return bool|WP_Error True on success, WP_Error on failure.
      */
-    private static function add_user_progress( $user_id, $course_id, $progress_percentage = null ) {
-        if ( ! function_exists( 'learndash_process_mark_complete' ) ) {
-            return false;
-        }
-
-        // Get lessons first
-        $lessons = learndash_course_get_lessons( $course_id );
-        if ( empty( $lessons ) ) {
-            return false;
-        }
-
-        $all_steps = array();
-        
-        // Process lessons and their topics
-        foreach ( $lessons as $lesson ) {
-            $lesson_id = $lesson->ID;
-            $all_steps[] = array( 'id' => $lesson_id, 'type' => 'lesson' );
+    private static function enroll_user_in_group( $user_id, $group_id ) {
+        try {
+            // Use standard LearnDash function to get current group users
+            $current_users = learndash_get_groups_users( $group_id );
             
-            // Get topics for this specific lesson - FIXED APPROACH
-            $topics = learndash_course_get_topics( $course_id, $lesson_id );
-            if ( ! empty( $topics ) ) {
-                foreach ( $topics as $topic ) {
-                    $all_steps[] = array( 'id' => $topic->ID, 'type' => 'topic' );
+            // Handle both user objects and IDs
+            $user_ids = array();
+            if ( is_array( $current_users ) ) {
+                foreach ( $current_users as $user ) {
+                    if ( is_object( $user ) && isset( $user->ID ) ) {
+                        $user_ids[] = intval( $user->ID );
+                    } elseif ( is_numeric( $user ) ) {
+                        $user_ids[] = intval( $user );
+                    }
                 }
             }
-        }
 
-        // Get quizzes
-        $quizzes = learndash_course_get_quizzes( $course_id );
-        if ( ! empty( $quizzes ) ) {
-            foreach ( $quizzes as $quiz ) {
-                $all_steps[] = array( 'id' => $quiz->ID, 'type' => 'quiz' );
-            }
-        }
-
-        if ( empty( $all_steps ) ) {
-            return false;
-        }
-
-        // Use specific percentage or random
-        $completion_rate = $progress_percentage ?: wp_rand( 25, 85 );
-        $total_steps = count( $all_steps );
-        $target = ceil( $total_steps * ( $completion_rate / 100 ) );
-
-        $marked = 0;
-        foreach ( $all_steps as $step ) {
-            $step_id = $step['id'];
-            
-            if ( learndash_is_item_complete( $user_id, $step_id ) ) {
-                continue;
+            // Add new user if not already present
+            if ( ! in_array( $user_id, $user_ids ) ) {
+                $user_ids[] = $user_id;
+                
+                // Use standard LearnDash function to set group users
+                $result = learndash_set_groups_users( $group_id, $user_ids );
+                
+                if ( $result === false ) {
+                    throw new Exception( 'learndash_set_groups_users returned false' );
+                }
             }
 
-            if ( learndash_process_mark_complete( $user_id, $step_id, false, $course_id, false ) ) {
-                $marked++;
+            // Verify enrollment was successful
+            if ( ! self::verify_group_enrollment( $user_id, $group_id ) ) {
+                throw new Exception( 'Enrollment verification failed' );
             }
 
-            if ( $marked >= $target ) {
-                break;
-            }
+            return true;
+
+        } catch ( Exception $e ) {
+            return new WP_Error( 
+                'enrollment_failed', 
+                'Failed to enroll user in group: ' . $e->getMessage(),
+                array( 'user_id' => $user_id, 'group_id' => $group_id )
+            );
         }
-
-        // Store progress metadata
-        update_user_meta( $user_id, '_ldtt_progress_created', current_time( 'timestamp' ) );
-        update_user_meta( $user_id, '_ldtt_progress_completion_rate', $completion_rate );
-
-        return true;
     }
 
     /**
-     * Check if a user is already enrolled in a course
+     * Check if a user is already in a group using standard LearnDash function
+     *
+     * @param int $user_id The user ID.
+     * @param int $group_id The group ID.
+     * @return bool True if user is in group, false otherwise.
      */
-    private static function is_user_enrolled( $user_id, $course_id ) {
-        // Try LearnDash function first
-        if ( function_exists( 'learndash_user_get_enrolled_courses' ) ) {
-            $enrolled_courses = learndash_user_get_enrolled_courses( $user_id );
-            return in_array( $course_id, $enrolled_courses );
+    private static function is_user_in_group( $user_id, $group_id ) {
+        // Use standard LearnDash function
+        $user_groups = learndash_get_users_group_ids( $user_id );
+        return is_array( $user_groups ) && in_array( $group_id, $user_groups );
+    }
+
+    /**
+     * Verify that a user was successfully enrolled in a group
+     *
+     * @param int $user_id The user ID.
+     * @param int $group_id The group ID.
+     * @return bool True if verified, false otherwise.
+     */
+    private static function verify_group_enrollment( $user_id, $group_id ) {
+        return self::is_user_in_group( $user_id, $group_id );
+    }
+
+    /**
+     * Get statistics about group enrollments
+     *
+     * @return array Statistics array.
+     */
+    public static function get_group_enrollment_statistics() {
+        $stats = array(
+            'total_groups' => 0,
+            'groups_with_members' => 0,
+            'total_group_members' => 0,
+            'ldtt_created_members' => 0,
+            'average_members_per_group' => 0,
+        );
+
+        // Get all groups
+        $groups = get_posts( array(
+            'post_type' => learndash_get_post_type_slug( 'group' ),
+            'post_status' => 'publish',
+            'numberposts' => -1,
+            'fields' => 'ids',
+        ) );
+
+        $stats['total_groups'] = count( $groups );
+        $total_members = 0;
+
+        foreach ( $groups as $group_id ) {
+            $group_users = learndash_get_groups_users( $group_id );
+            $member_count = is_array( $group_users ) ? count( $group_users ) : 0;
+            
+            if ( $member_count > 0 ) {
+                $stats['groups_with_members']++;
+                $total_members += $member_count;
+            }
         }
 
-        // Fallback method - check user meta
-        $course_progress = get_user_meta( $user_id, '_sfwd-course_progress', true );
-        if ( is_array( $course_progress ) && isset( $course_progress[ $course_id ] ) ) {
-            return true;
+        $stats['total_group_members'] = $total_members;
+        
+        // Count LDTT created group members
+        $ldtt_members = get_users( array(
+            'meta_key' => '_ldtt_user_type',
+            'meta_value' => 'group_member',
+            'fields' => 'ID',
+        ) );
+        
+        $stats['ldtt_created_members'] = count( $ldtt_members );
+        
+        // Calculate average
+        if ( $stats['groups_with_members'] > 0 ) {
+            $stats['average_members_per_group'] = round( $total_members / $stats['groups_with_members'], 2 );
         }
 
-        return false;
+        return $stats;
     }
 }
