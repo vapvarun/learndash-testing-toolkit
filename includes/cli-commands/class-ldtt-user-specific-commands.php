@@ -1,10 +1,14 @@
 <?php
 
 /**
- * Add Progress to Specific User Command
+ * User Specific Commands - Fixed with Standard LearnDash Functions Only
  * 
  * @package LearnDash_Testing_Toolkit
  * @since 1.2.0
+ */
+
+/**
+ * Add Progress to Specific User Command
  */
 class LDTT_Add_User_Progress {
 
@@ -32,7 +36,7 @@ class LDTT_Add_User_Progress {
         $user_id = ! empty( $assoc_args['user_id'] ) ? absint( $assoc_args['user_id'] ) : null;
         $course_selection = sanitize_text_field( $assoc_args['course_selection'] ?? 'specific' );
         $specific_course_id = ! empty( $assoc_args['specific_course_id'] ) ? absint( $assoc_args['specific_course_id'] ) : null;
-        $min_progress = LDTT_Helper::validate_positive_int( $assoc_args['min_progress'] ?? 25, 25, 100 );
+        $min_progress = LDTT_Helper::validate_positive_int( $assoc_args['min_progress'] ?? 25, 0, 100 );
         $max_progress = LDTT_Helper::validate_positive_int( $assoc_args['max_progress'] ?? 100, $min_progress, 100 );
         $overwrite_existing = isset( $assoc_args['overwrite_existing'] ) && $assoc_args['overwrite_existing'];
         $include_quizzes = isset( $assoc_args['include_quizzes'] ) && $assoc_args['include_quizzes'];
@@ -137,41 +141,15 @@ class LDTT_Add_User_Progress {
             }
             return array( $specific_course_id );
         } elseif ( $course_selection === 'enrolled' ) {
-            // Get all enrolled courses for user
-            return self::get_user_enrolled_courses( $user_id );
+            // Get all enrolled courses for user using standard LearnDash function
+            return learndash_user_get_enrolled_courses( $user_id );
         }
         
         return array();
     }
 
     /**
-     * Get courses a user is enrolled in
-     * 
-     * @param int $user_id
-     * @return array
-     */
-    private static function get_user_enrolled_courses( $user_id ) {
-        // Try LearnDash function first
-        if ( function_exists( 'learndash_user_get_enrolled_courses' ) ) {
-            return learndash_user_get_enrolled_courses( $user_id );
-        }
-        
-        // Fallback method
-        global $wpdb;
-        
-        $courses = $wpdb->get_col( $wpdb->prepare( "
-            SELECT DISTINCT pm.post_id
-            FROM {$wpdb->postmeta} pm
-            JOIN {$wpdb->usermeta} um ON um.meta_key LIKE CONCAT('course_', pm.post_id, '_%')
-            WHERE um.user_id = %d
-            AND pm.meta_key = '_sfwd-courses'
-        ", $user_id ) );
-        
-        return array_map( 'absint', $courses );
-    }
-
-    /**
-     * Create progress for a user in a specific course
+     * Create progress for a user in a specific course using standard LearnDash functions
      * 
      * @param int $user_id
      * @param int $course_id
@@ -179,23 +157,6 @@ class LDTT_Add_User_Progress {
      * @return array|false
      */
     private static function create_progress_for_user( $user_id, $course_id, $options = array() ) {
-        if ( class_exists( 'LDTT_Progress_Manager' ) ) {
-            return LDTT_Progress_Manager::create_realistic_progress( $user_id, $course_id, $options );
-        } else {
-            // Fallback to basic progress creation
-            return self::create_basic_progress( $user_id, $course_id, $options );
-        }
-    }
-
-    /**
-     * Create basic progress for a user (fallback method)
-     * 
-     * @param int $user_id
-     * @param int $course_id
-     * @param array $options
-     * @return array|false
-     */
-    private static function create_basic_progress( $user_id, $course_id, $options = array() ) {
         $defaults = array(
             'min_completion' => 25,
             'max_completion' => 100,
@@ -205,49 +166,96 @@ class LDTT_Add_User_Progress {
         
         $options = wp_parse_args( $options, $defaults );
         
-        // Get course lessons
-        $lessons = get_posts( array(
-            'post_type' => learndash_get_post_type_slug( 'lesson' ),
-            'meta_key' => 'learndash_course',
-            'meta_value' => $course_id,
-            'numberposts' => -1,
-            'fields' => 'ids'
-        ) );
-
+        // Get course lessons using standard LearnDash function
+        $lessons = learndash_course_get_lessons( $course_id );
         if ( empty( $lessons ) ) {
             return false;
         }
 
-        // Complete random lessons based on completion rate
+        // Calculate completion rate
         $completion_rate = wp_rand( $options['min_completion'], $options['max_completion'] );
-        $lessons_to_complete = round( count( $lessons ) * ( $completion_rate / 100 ) );
-        
-        $lessons_to_complete = min( $lessons_to_complete, count( $lessons ) );
-        $selected_lessons = array_slice( $lessons, 0, $lessons_to_complete );
+        $total_steps = 0;
+        $all_steps = array();
 
-        $current_time = $options['realistic_timestamps'] ? strtotime( '-' . wp_rand( 1, 30 ) . ' days' ) : time();
+        // Collect all course steps (lessons, topics, quizzes)
+        foreach ( $lessons as $lesson ) {
+            $lesson_id = $lesson->ID;
+            $all_steps[] = array( 'id' => $lesson_id, 'type' => 'lesson' );
+            $total_steps++;
 
-        foreach ( $selected_lessons as $lesson_id ) {
-            if ( $options['realistic_timestamps'] ) {
-                $current_time += wp_rand( 3600, 259200 ); // 1 hour to 3 days between lessons
-            }
-            
-            learndash_process_mark_complete( $user_id, $lesson_id, false, $course_id );
-            
-            // Handle topics
-            $topics = learndash_get_topic_list( $lesson_id, $course_id );
+            // Get topics for this lesson using standard LearnDash function
+            $topics = learndash_course_get_topics( $course_id, $lesson_id );
             if ( ! empty( $topics ) ) {
-                $topic_completion_rate = wp_rand( 50, 100 );
-                $topics_to_complete = round( count( $topics ) * ( $topic_completion_rate / 100 ) );
-                
-                $completed_topics = array_slice( $topics, 0, $topics_to_complete );
-                foreach ( $completed_topics as $topic ) {
-                    if ( $options['realistic_timestamps'] ) {
-                        $current_time += wp_rand( 300, 1800 ); // 5-30 minutes between topics
-                    }
-                    
-                    learndash_process_mark_complete( $user_id, $topic->ID, false, $course_id );
+                foreach ( $topics as $topic ) {
+                    $all_steps[] = array( 'id' => $topic->ID, 'type' => 'topic' );
+                    $total_steps++;
                 }
+            }
+
+            // Get lesson quizzes if enabled
+            if ( $options['include_quizzes'] ) {
+                $lesson_quizzes = learndash_get_lesson_quiz_list( $lesson_id );
+                if ( ! empty( $lesson_quizzes ) ) {
+                    foreach ( $lesson_quizzes as $quiz ) {
+                        $all_steps[] = array( 'id' => $quiz['post']->ID, 'type' => 'quiz' );
+                        $total_steps++;
+                    }
+                }
+            }
+        }
+
+        // Get course quizzes if enabled
+        if ( $options['include_quizzes'] ) {
+            $course_quizzes = learndash_course_get_quizzes( $course_id );
+            if ( ! empty( $course_quizzes ) ) {
+                foreach ( $course_quizzes as $quiz ) {
+                    $all_steps[] = array( 'id' => $quiz->ID, 'type' => 'quiz' );
+                    $total_steps++;
+                }
+            }
+        }
+
+        if ( $total_steps === 0 ) {
+            return false;
+        }
+
+        // Calculate how many steps to complete
+        $steps_to_complete = round( $total_steps * ( $completion_rate / 100 ) );
+        $steps_to_complete = min( $steps_to_complete, $total_steps );
+
+        // Setup timing
+        $current_time = $options['realistic_timestamps'] ? strtotime( '-' . wp_rand( 1, 30 ) . ' days' ) : time();
+        $completed_steps = 0;
+
+        // Complete the calculated number of steps
+        foreach ( array_slice( $all_steps, 0, $steps_to_complete ) as $step ) {
+            $step_id = $step['id'];
+            $step_type = $step['type'];
+
+            // Use realistic timing progression
+            if ( $options['realistic_timestamps'] ) {
+                $current_time += wp_rand( 300, 3600 ); // 5 minutes to 1 hour between steps
+            }
+
+            // Mark step as complete using standard LearnDash function
+            $result = learndash_process_mark_complete( $user_id, $step_id, false, $course_id );
+            
+            if ( $result ) {
+                $completed_steps++;
+
+                // Create user activity entry for realistic tracking
+                $activity_args = array(
+                    'user_id'           => $user_id,
+                    'post_id'           => $step_id,
+                    'course_id'         => $course_id,
+                    'activity_type'     => $step_type,
+                    'activity_action'   => 'insert',
+                    'activity_status'   => true,
+                    'activity_started'  => $current_time - wp_rand( 300, 1800 ),
+                    'activity_completed' => $current_time,
+                );
+
+                learndash_update_user_activity( $activity_args );
             }
         }
 
@@ -256,24 +264,21 @@ class LDTT_Add_User_Progress {
         update_user_meta( $user_id, '_ldtt_progress_completion_rate', $completion_rate );
         update_user_meta( $user_id, '_ldtt_progress_course_' . $course_id, array(
             'completion_rate' => $completion_rate,
-            'items_completed' => $lessons_to_complete,
-            'total_items' => count( $lessons ),
+            'items_completed' => $completed_steps,
+            'total_items' => $total_steps,
             'created' => current_time( 'timestamp' ),
         ) );
 
         return array(
             'completion_rate' => $completion_rate,
-            'items_completed' => $lessons_to_complete,
-            'total_items' => count( $lessons ),
+            'items_completed' => $completed_steps,
+            'total_items' => $total_steps,
         );
     }
 }
 
 /**
  * Enroll User in Courses Command
- * 
- * @package LearnDash_Testing_Toolkit
- * @since 1.2.0
  */
 class LDTT_Enroll_User_Courses {
 
@@ -298,7 +303,7 @@ class LDTT_Enroll_User_Courses {
         $user_id = ! empty( $assoc_args['user_id'] ) ? absint( $assoc_args['user_id'] ) : null;
         $course_ids_string = sanitize_text_field( $assoc_args['course_ids'] ?? '' );
         $auto_progress = isset( $assoc_args['auto_progress'] ) && $assoc_args['auto_progress'];
-        $auto_min_progress = LDTT_Helper::validate_positive_int( $assoc_args['auto_min_progress'] ?? 25, 25, 100 );
+        $auto_min_progress = LDTT_Helper::validate_positive_int( $assoc_args['auto_min_progress'] ?? 25, 0, 100 );
         $auto_max_progress = LDTT_Helper::validate_positive_int( $assoc_args['auto_max_progress'] ?? 100, $auto_min_progress, 100 );
 
         // Validate user ID
@@ -344,7 +349,7 @@ class LDTT_Enroll_User_Courses {
                 continue;
             }
 
-            // Enroll user in course
+            // Enroll user in course using standard LearnDash function
             $enrollment_result = ld_update_course_access( $user_id, $course_id, false );
             
             if ( $enrollment_result !== false ) {
@@ -364,7 +369,7 @@ class LDTT_Enroll_User_Courses {
                         'realistic_timestamps' => true,
                     );
 
-                    $progress_result = self::create_progress_for_user( $user_id, $course_id, $progress_options );
+                    $progress_result = LDTT_Add_User_Progress::create_progress_for_user( $user_id, $course_id, $progress_options );
                     
                     if ( $progress_result ) {
                         $progress_count++;
@@ -422,30 +427,10 @@ class LDTT_Enroll_User_Courses {
 
         return array_unique( $valid_ids );
     }
-
-    /**
-     * Create progress for a user in a specific course
-     * 
-     * @param int $user_id
-     * @param int $course_id
-     * @param array $options
-     * @return array|false
-     */
-    private static function create_progress_for_user( $user_id, $course_id, $options = array() ) {
-        if ( class_exists( 'LDTT_Progress_Manager' ) ) {
-            return LDTT_Progress_Manager::create_realistic_progress( $user_id, $course_id, $options );
-        } else {
-            // Use the same fallback method as in LDTT_Add_User_Progress
-            return LDTT_Add_User_Progress::create_basic_progress( $user_id, $course_id, $options );
-        }
-    }
 }
 
 /**
  * User Information Command
- * 
- * @package LearnDash_Testing_Toolkit
- * @since 1.2.0
  */
 class LDTT_User_Info {
 
@@ -499,7 +484,7 @@ class LDTT_User_Info {
     }
 
     /**
-     * Get comprehensive user information
+     * Get comprehensive user information using standard LearnDash functions
      * 
      * @param WP_User $user
      * @return array
@@ -529,99 +514,71 @@ class LDTT_User_Info {
             'groups' => array(),
         );
 
-        // Get course enrollments
-        $enrolled_courses = self::get_user_enrolled_courses( $user_id );
+        // Get course enrollments using standard LearnDash function
+        $enrolled_courses = learndash_user_get_enrolled_courses( $user_id );
         foreach ( $enrolled_courses as $course_id ) {
             $course_title = get_the_title( $course_id );
             $progress_meta = get_user_meta( $user_id, '_ldtt_progress_course_' . $course_id, true );
             
+            // Get course progress using standard LearnDash function
+            $course_progress = learndash_user_get_course_progress( $user_id, $course_id );
+            $completion_percentage = 0;
+            
+            if ( isset( $course_progress['total'] ) && $course_progress['total'] > 0 ) {
+                $completion_percentage = round( ( $course_progress['completed'] / $course_progress['total'] ) * 100, 2 );
+            }
+            
             $info['enrollments'][ $course_id ] = array(
                 'title' => $course_title,
                 'has_ldtt_progress' => ! empty( $progress_meta ),
-                'completion_rate' => $progress_meta['completion_rate'] ?? null,
+                'ldtt_completion_rate' => $progress_meta['completion_rate'] ?? null,
+                'actual_completion_rate' => $completion_percentage,
+                'steps_completed' => $course_progress['completed'] ?? 0,
+                'total_steps' => $course_progress['total'] ?? 0,
             );
         }
 
-        // Get group memberships
-        if ( function_exists( 'learndash_get_users_group_ids' ) ) {
-            $group_ids = learndash_get_users_group_ids( $user_id );
-            foreach ( $group_ids as $group_id ) {
-                $group_title = get_the_title( $group_id );
-                $info['groups'][ $group_id ] = array(
-                    'title' => $group_title,
-                    'role' => self::get_user_group_role( $user_id, $group_id ),
-                );
-            }
+        // Get group memberships using standard LearnDash function
+        $group_ids = learndash_get_users_group_ids( $user_id );
+        foreach ( $group_ids as $group_id ) {
+            $group_title = get_the_title( $group_id );
+            $info['groups'][ $group_id ] = array(
+                'title' => $group_title,
+                'role' => self::get_user_group_role( $user_id, $group_id ),
+            );
         }
 
-        // Get progress statistics
+        // Calculate progress statistics
+        $completion_rates = array_column( $info['enrollments'], 'actual_completion_rate' );
+        $completion_rates = array_filter( $completion_rates, function( $rate ) { return $rate > 0; } );
+        
         $info['progress'] = array(
             'total_courses' => count( $enrolled_courses ),
-            'courses_with_progress' => count( array_filter( $info['enrollments'], function( $course ) {
+            'courses_with_progress' => count( $completion_rates ),
+            'courses_with_ldtt_progress' => count( array_filter( $info['enrollments'], function( $course ) {
                 return $course['has_ldtt_progress'];
             } ) ),
-            'average_completion' => self::calculate_average_completion( $info['enrollments'] ),
+            'average_completion' => ! empty( $completion_rates ) ? round( array_sum( $completion_rates ) / count( $completion_rates ), 2 ) : 0,
         );
 
         return $info;
     }
 
     /**
-     * Get courses a user is enrolled in
-     * 
-     * @param int $user_id
-     * @return array
-     */
-    private static function get_user_enrolled_courses( $user_id ) {
-        if ( function_exists( 'learndash_user_get_enrolled_courses' ) ) {
-            return learndash_user_get_enrolled_courses( $user_id );
-        }
-        
-        // Fallback method
-        global $wpdb;
-        
-        $courses = $wpdb->get_col( $wpdb->prepare( "
-            SELECT DISTINCT pm.post_id
-            FROM {$wpdb->postmeta} pm
-            JOIN {$wpdb->usermeta} um ON um.meta_key LIKE CONCAT('course_', pm.post_id, '_%')
-            WHERE um.user_id = %d
-            AND pm.meta_key = '_sfwd-courses'
-        ", $user_id ) );
-        
-        return array_map( 'absint', $courses );
-    }
-
-    /**
-     * Get user's role in a specific group
+     * Get user's role in a specific group using standard LearnDash functions
      * 
      * @param int $user_id
      * @param int $group_id
      * @return string
      */
     private static function get_user_group_role( $user_id, $group_id ) {
-        // Check if user is group leader
-        $group_leaders = get_post_meta( $group_id, '_ld_group_administrators', true );
+        // Check if user is group leader using standard LearnDash function
+        $group_leaders = learndash_get_groups_administrators( $group_id );
         if ( is_array( $group_leaders ) && in_array( $user_id, $group_leaders ) ) {
             return 'leader';
         }
         
         return 'member';
-    }
-
-    /**
-     * Calculate average completion rate
-     * 
-     * @param array $enrollments
-     * @return float
-     */
-    private static function calculate_average_completion( $enrollments ) {
-        $rates = array_filter( array_column( $enrollments, 'completion_rate' ) );
-        
-        if ( empty( $rates ) ) {
-            return 0.0;
-        }
-        
-        return round( array_sum( $rates ) / count( $rates ), 2 );
     }
 
     /**
@@ -650,8 +607,10 @@ class LDTT_User_Info {
         WP_CLI::line( "\n=== COURSE ENROLLMENTS ===" );
         if ( ! empty( $user_info['enrollments'] ) ) {
             foreach ( $user_info['enrollments'] as $course_id => $course ) {
-                $progress_text = $course['has_ldtt_progress'] ? " ({$course['completion_rate']}% complete)" : ' (no LDTT progress)';
-                WP_CLI::line( "- {$course['title']} (ID: {$course_id}){$progress_text}" );
+                $ldtt_progress = $course['has_ldtt_progress'] ? " (LDTT: {$course['ldtt_completion_rate']}%)" : '';
+                $actual_progress = " [Actual: {$course['actual_completion_rate']}%]";
+                $steps_info = " ({$course['steps_completed']}/{$course['total_steps']} steps)";
+                WP_CLI::line( "- {$course['title']} (ID: {$course_id}){$actual_progress}{$ldtt_progress}{$steps_info}" );
             }
         } else {
             WP_CLI::line( "No course enrollments found." );
@@ -668,7 +627,8 @@ class LDTT_User_Info {
         
         WP_CLI::line( "\n=== PROGRESS SUMMARY ===" );
         WP_CLI::line( "Total Courses: {$progress['total_courses']}" );
-        WP_CLI::line( "Courses with LDTT Progress: {$progress['courses_with_progress']}" );
+        WP_CLI::line( "Courses with Progress: {$progress['courses_with_progress']}" );
+        WP_CLI::line( "Courses with LDTT Progress: {$progress['courses_with_ldtt_progress']}" );
         WP_CLI::line( "Average Completion Rate: {$progress['average_completion']}%" );
     }
 }

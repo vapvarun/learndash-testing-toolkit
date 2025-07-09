@@ -1,5 +1,9 @@
 <?php
 
+/**
+ * Enrollment Command - Fixed with Standard LearnDash Functions Only
+ * Creates users and enrolls them in courses, or enrolls existing users
+ */
 class LDTT_Enrollment {
 
     /**
@@ -20,7 +24,7 @@ class LDTT_Enrollment {
         }
 
         $course_id = ! empty( $assoc_args['course_id'] ) ? absint( $assoc_args['course_id'] ) : null;
-        $user_count = LDTT_Helper::validate_positive_int( $assoc_args['count'] ?? 10, 10, 300 );
+        $user_count = LDTT_Helper::validate_positive_int( $assoc_args['count'] ?? 10, 1, 300 );
         $use_existing = isset( $assoc_args['use_existing'] ) && $assoc_args['use_existing'];
 
         if ( ! $course_id ) {
@@ -42,7 +46,7 @@ class LDTT_Enrollment {
 
         $course_title = get_the_title( $course_id );
 
-        // ENHANCED: Choose method based on use_existing flag
+        // Choose method based on use_existing flag
         if ( $use_existing ) {
             $user_ids = self::enroll_existing_users( $course_id, $user_count );
         } else {
@@ -74,7 +78,7 @@ class LDTT_Enrollment {
     }
 
     /**
-     * NEW: Enroll existing users in a course
+     * Enroll existing users in a course using standard LearnDash functions
      *
      * @param int $course_id
      * @param int $user_count
@@ -101,7 +105,7 @@ class LDTT_Enrollment {
         $enrolled_users = array();
 
         foreach ( $users_to_enroll as $user_id ) {
-            // Check if user is already enrolled
+            // Check if user is already enrolled using standard LearnDash function
             if ( self::is_user_enrolled( $user_id, $course_id ) ) {
                 if ( defined( 'WP_CLI' ) && WP_CLI ) {
                     WP_CLI::line( "User {$user_id} already enrolled, skipping." );
@@ -109,7 +113,7 @@ class LDTT_Enrollment {
                 continue;
             }
 
-            // Enroll the user in the course using LearnDash function
+            // Enroll the user in the course using standard LearnDash function
             $result = ld_update_course_access( $user_id, $course_id, false );
             
             if ( $result !== false ) {
@@ -167,7 +171,7 @@ class LDTT_Enrollment {
             update_user_meta( $user_id, '_ldtt_test_user', true );
             update_user_meta( $user_id, '_ldtt_user_type', 'course_enrolled' );
 
-            // Enroll the user in the course using LearnDash function
+            // Enroll the user in the course using standard LearnDash function
             $result = ld_update_course_access( $user_id, $course_id, false );
             if ( ! $result ) {
                 if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -187,25 +191,15 @@ class LDTT_Enrollment {
     }
 
     /**
-     * Check if a user is already enrolled in a course
+     * Check if a user is already enrolled in a course using standard LearnDash function
      *
      * @param int $user_id
      * @param int $course_id
      * @return bool
      */
     private static function is_user_enrolled( $user_id, $course_id ) {
-        // Try LearnDash function first
-        if ( function_exists( 'learndash_user_get_enrolled_courses' ) ) {
-            $enrolled_courses = learndash_user_get_enrolled_courses( $user_id );
-            return in_array( $course_id, $enrolled_courses );
-        }
-
-        // Fallback method - check user meta
-        $course_progress = get_user_meta( $user_id, '_sfwd-course_progress', true );
-        if ( is_array( $course_progress ) && isset( $course_progress[ $course_id ] ) ) {
-            return true;
-        }
-
-        return false;
+        // Use standard LearnDash function
+        $enrolled_courses = learndash_user_get_enrolled_courses( $user_id );
+        return in_array( $course_id, $enrolled_courses );
     }
 }
