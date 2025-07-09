@@ -177,29 +177,40 @@ class LDTT_Loader {
             'group-leaders' => 'LDTT_Group_Leaders',
             'group-enrollment' => 'LDTT_Group_Enrollment',
             'enhanced-user-distribution' => 'LDTT_Enhanced_User_Distribution',
-            'assign-progress' => 'LDTT_Enhanced_User_Distribution',
+            'assign-progress' => array( 'LDTT_Enhanced_User_Distribution', 'assign_progress_to_enrolled' ), // FIX: Use array format
         );
-
-        foreach ( $commands as $command_name => $class_name ) {
-            if ( class_exists( $class_name ) ) {
-                // Handle special case for assign-progress command
-                if ( $command_name === 'assign-progress' ) {
-                    WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, 'assign_progress_to_enrolled' ) );
-                } else {
-                    WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, 'handle' ) );
-                }
+    
+        foreach ( $commands as $command_name => $class_info ) {
+            if ( is_array( $class_info ) ) {
+                // Handle array format for custom methods
+                $class_name = $class_info[0];
+                $method_name = $class_info[1];
                 
-                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                    error_log( "[LDTT] Registered CLI command: ldtt {$command_name}" );
+                if ( class_exists( $class_name ) && method_exists( $class_name, $method_name ) ) {
+                    WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, $method_name ) );
+                    
+                    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                        error_log( "[LDTT] Registered CLI command: ldtt {$command_name} -> {$class_name}::{$method_name}" );
+                    }
                 }
             } else {
-                if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-                    error_log( "[LDTT] Command class not found: {$class_name}" );
+                // Handle single class format
+                $class_name = $class_info;
+                
+                if ( class_exists( $class_name ) ) {
+                    WP_CLI::add_command( 'ldtt ' . $command_name, array( $class_name, 'handle' ) );
+                    
+                    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                        error_log( "[LDTT] Registered CLI command: ldtt {$command_name}" );
+                    }
+                } else {
+                    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+                        error_log( "[LDTT] Command class not found: {$class_name}" );
+                    }
                 }
             }
         }
     }
-
     /**
      * Initialize hooks
      */
