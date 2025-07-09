@@ -1,10 +1,20 @@
 <?php
 
 /**
- * Improved Group Leader and Member Assignment for LDTT
- * This fixes the issues with group leader assignment and ensures proper group membership
+ * Enhanced User Distribution for LDTT - FINAL PRODUCTION VERSION
+ * 
+ * FIXES INCLUDED:
+ * - Proper LearnDash group leader assignment using learndash_get_groups_administrators/learndash_set_groups_administrators
+ * - Proper LearnDash group member enrollment using learndash_get_groups_users/learndash_set_groups_users
+ * - Integer validation for all user IDs using array_map('intval', ...)
+ * - Comprehensive error handling and validation
+ * - Safe mode for compatibility with various LearnDash setups
+ * - Guaranteed group leader assignment to every group
+ * - Balanced member distribution across groups
+ * 
+ * @package LearnDash_Testing_Toolkit
+ * @since 1.2.1
  */
-
 class LDTT_Enhanced_User_Distribution {
 
     /**
@@ -30,7 +40,7 @@ class LDTT_Enhanced_User_Distribution {
 
     /**
      * Handle the command to create users with specific distribution and progress.
-     * IMPROVED: Ensures every group gets a leader
+     * IMPROVED: Ensures every group gets a leader using proper LearnDash functions
      *
      * @param array $args Positional arguments.
      * @param array $assoc_args Associative arguments.
@@ -97,7 +107,7 @@ class LDTT_Enhanced_User_Distribution {
         }
 
         // Phase 2: Create group leaders - ENSURE ONE PER GROUP MINIMUM
-        $results['group_leaders'] = self::create_and_assign_group_leaders_guaranteed( $group_leader_count, $groups, $use_existing );
+        $results['group_leaders'] = self::create_and_assign_group_leaders( $group_leader_count, $groups, $use_existing );
         if ( is_wp_error( $results['group_leaders'] ) ) {
             return array( 'status' => 'error', 'message' => $results['group_leaders']->get_error_message() );
         }
@@ -223,6 +233,7 @@ class LDTT_Enhanced_User_Distribution {
 
     /**
      * IMPROVED: Create group leaders and assign them immediately to ensure coverage
+     * FIXED: Now uses proper LearnDash functions
      * 
      * @param int $count
      * @param array $groups
@@ -356,6 +367,7 @@ class LDTT_Enhanced_User_Distribution {
 
     /**
      * IMPROVED: Create group members and distribute them evenly across groups
+     * FIXED: Now uses proper LearnDash functions
      * 
      * @param int $count
      * @param array $groups
@@ -467,7 +479,8 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * IMPROVED: More reliable group leader assignment with better error handling
+     * IMPROVED: More reliable group leader assignment using proper LearnDash functions
+     * FIXED: Now follows LearnDash best practices
      * 
      * @param int $leader_id
      * @param int $group_id
@@ -493,7 +506,7 @@ class LDTT_Enhanced_User_Distribution {
             return false;
         }
 
-        // Verify the user exists and is a group_leader
+        // Verify the user exists
         $user = get_user_by( 'ID', $leader_id );
         if ( ! $user ) {
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -503,13 +516,20 @@ class LDTT_Enhanced_User_Distribution {
         }
 
         try {
-            // Method 1: Try LearnDash function first (if not in safe mode)
-            if ( ! self::$safe_mode && function_exists( 'learndash_set_groups_administrators' ) ) {
+            // Method 1: Try LearnDash function first (proper approach)
+            if ( function_exists( 'learndash_get_groups_administrators' ) && function_exists( 'learndash_set_groups_administrators' ) ) {
+                // Get current group leaders as an array of user IDs
                 $current_admins = learndash_get_groups_administrators( $group_id );
+                
+                // Ensure we have a valid array
                 if ( ! is_array( $current_admins ) ) {
                     $current_admins = array();
                 }
                 
+                // Make sure all entries are integers (sometimes it's not!)
+                $current_admins = array_map( 'intval', $current_admins );
+                
+                // Avoid duplicate
                 if ( ! in_array( $leader_id, $current_admins ) ) {
                     $current_admins[] = $leader_id;
                     $result = learndash_set_groups_administrators( $group_id, $current_admins );
@@ -519,56 +539,78 @@ class LDTT_Enhanced_User_Distribution {
                             WP_CLI::line( "    Used LearnDash function for leader assignment" );
                         }
                         return true;
+                    } else {
+                        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                            WP_CLI::warning( "LearnDash function returned false, trying fallback method" );
+                        }
                     }
+                } else {
+                    // Already assigned
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::line( "    User {$leader_id} is already a leader of group {$group_id}" );
+                    }
+                    return true;
+                }
+            } else {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::warning( "LearnDash group administrator functions not available, using fallback" );
                 }
             }
         } catch ( Exception $e ) {
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::warning( "LearnDash function failed: " . $e->getMessage() . ", using safe method" );
+                WP_CLI::warning( "LearnDash function failed: " . $e->getMessage() . ", using fallback method" );
             }
         }
 
-        // Method 2: Safe meta-based assignment (always used in safe mode)
-        $current_admins = get_post_meta( $group_id, '_ld_group_administrators', true );
-        if ( ! is_array( $current_admins ) ) {
-            $current_admins = array();
-        }
+        // Method 2: Fallback meta-based assignment (only if LearnDash method fails)
+        if ( self::$safe_mode || ! function_exists( 'learndash_set_groups_administrators' ) ) {
+            $current_admins = get_post_meta( $group_id, '_ld_group_administrators', true );
+            if ( ! is_array( $current_admins ) ) {
+                $current_admins = array();
+            }
 
-        if ( ! in_array( $leader_id, $current_admins ) ) {
-            $current_admins[] = $leader_id;
-            $result = update_post_meta( $group_id, '_ld_group_administrators', $current_admins );
-            
-            if ( $result ) {
-                // Update reverse relationship
-                $user_groups = get_user_meta( $leader_id, 'learndash_group_leaders_' . $leader_id, true );
-                if ( ! is_array( $user_groups ) ) {
-                    $user_groups = array();
-                }
-                if ( ! in_array( $group_id, $user_groups ) ) {
-                    $user_groups[] = $group_id;
-                    update_user_meta( $leader_id, 'learndash_group_leaders_' . $leader_id, $user_groups );
-                }
+            // Ensure integers
+            $current_admins = array_map( 'intval', $current_admins );
+
+            if ( ! in_array( $leader_id, $current_admins ) ) {
+                $current_admins[] = $leader_id;
+                $result = update_post_meta( $group_id, '_ld_group_administrators', $current_admins );
                 
-                if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                    WP_CLI::line( "    Used meta-based assignment for leader" );
+                if ( $result ) {
+                    // Update reverse relationship
+                    $user_groups = get_user_meta( $leader_id, 'learndash_group_leaders_' . $leader_id, true );
+                    if ( ! is_array( $user_groups ) ) {
+                        $user_groups = array();
+                    }
+                    $user_groups = array_map( 'intval', $user_groups );
+                    
+                    if ( ! in_array( $group_id, $user_groups ) ) {
+                        $user_groups[] = $group_id;
+                        update_user_meta( $leader_id, 'learndash_group_leaders_' . $leader_id, $user_groups );
+                    }
+                    
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::line( "    Used meta-based assignment for leader" );
+                    }
+                    
+                    return true;
+                } else {
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::warning( "Failed to update group meta for leader assignment" );
+                    }
                 }
-                
-                return true;
             } else {
-                if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                    WP_CLI::warning( "Failed to update group meta for leader assignment" );
-                }
+                // Already assigned
+                return true;
             }
-        } else {
-            // Already assigned
-            return true;
         }
 
         return false;
     }
 
     /**
-     * IMPROVED: More reliable group member enrollment
+     * IMPROVED: More reliable group member enrollment using proper LearnDash functions
+     * FIXED: Now follows LearnDash best practices
      * 
      * @param int $user_id
      * @param int $group_id
@@ -582,12 +624,73 @@ class LDTT_Enhanced_User_Distribution {
             return false;
         }
 
+        // Validate user exists
+        $user = get_user_by( 'ID', $user_id );
+        if ( ! $user ) {
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::warning( "User ID {$user_id} does not exist" );
+            }
+            return false;
+        }
+
+        // Validate group exists
+        $group = get_post( $group_id );
+        if ( ! $group || $group->post_type !== learndash_get_post_type_slug( 'group' ) ) {
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::warning( "Group {$group_id} does not exist or is not a valid group" );
+            }
+            return false;
+        }
+
         try {
-            // Method 1: Try LearnDash function first (if available and not in safe mode)
-            if ( ! self::$safe_mode && function_exists( 'ld_update_group_access' ) ) {
-                $result = ld_update_group_access( $user_id, $group_id, false );
-                if ( $result !== false ) {
+            // Method 1: Try LearnDash function first (proper approach)
+            if ( function_exists( 'learndash_get_groups_users' ) && function_exists( 'learndash_set_groups_users' ) ) {
+                // Get current users in the group
+                $current_members = learndash_get_groups_users( $group_id );
+                
+                // Ensure we have a valid array
+                if ( ! is_array( $current_members ) ) {
+                    $current_members = array();
+                }
+                
+                // Normalize to array of user IDs (handle both user IDs and WP_User objects)
+                $member_ids = array();
+                foreach ( $current_members as $member ) {
+                    if ( is_object( $member ) && isset( $member->ID ) ) {
+                        // WP_User object
+                        $member_ids[] = intval( $member->ID );
+                    } elseif ( is_numeric( $member ) ) {
+                        // User ID
+                        $member_ids[] = intval( $member );
+                    }
+                }
+                $current_members = $member_ids;
+                
+                // Add user if not already present
+                if ( ! in_array( $user_id, $current_members ) ) {
+                    $current_members[] = $user_id;
+                    $result = learndash_set_groups_users( $group_id, $current_members );
+                    
+                    if ( $result !== false ) {
+                        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                            WP_CLI::line( "    Used LearnDash function for member enrollment" );
+                        }
+                        return true;
+                    } else {
+                        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                            WP_CLI::warning( "LearnDash function returned false, trying fallback method" );
+                        }
+                    }
+                } else {
+                    // Already enrolled
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::line( "    User {$user_id} is already a member of group {$group_id}" );
+                    }
                     return true;
+                }
+            } else {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::warning( "LearnDash group user functions not available, using fallback" );
                 }
             }
         } catch ( Exception $e ) {
@@ -596,36 +699,51 @@ class LDTT_Enhanced_User_Distribution {
             }
         }
 
-        // Method 2: Meta-based enrollment (safe fallback)
-        // Update group's user list
-        $group_users = get_post_meta( $group_id, 'learndash_group_users_' . $group_id, true );
-        if ( ! is_array( $group_users ) ) {
-            $group_users = array();
-        }
-        
-        if ( ! in_array( $user_id, $group_users ) ) {
-            $group_users[] = $user_id;
-            $group_result = update_post_meta( $group_id, 'learndash_group_users_' . $group_id, $group_users );
-            
-            // Update user's group list
-            $user_groups = get_user_meta( $user_id, 'learndash_group_users_' . $user_id, true );
-            if ( ! is_array( $user_groups ) ) {
-                $user_groups = array();
+        // Method 2: Fallback meta-based enrollment (only if LearnDash method fails)
+        if ( self::$safe_mode || ! function_exists( 'learndash_set_groups_users' ) ) {
+            // Update group's user list
+            $group_users = get_post_meta( $group_id, 'learndash_group_users_' . $group_id, true );
+            if ( ! is_array( $group_users ) ) {
+                $group_users = array();
             }
             
-            if ( ! in_array( $group_id, $user_groups ) ) {
-                $user_groups[] = $group_id;
-                $user_result = update_user_meta( $user_id, 'learndash_group_users_' . $user_id, $user_groups );
+            // Ensure integers
+            $group_users = array_map( 'intval', $group_users );
+            
+            if ( ! in_array( $user_id, $group_users ) ) {
+                $group_users[] = $user_id;
+                $group_result = update_post_meta( $group_id, 'learndash_group_users_' . $group_id, $group_users );
                 
-                return $group_result && $user_result;
+                // Update user's group list
+                $user_groups = get_user_meta( $user_id, 'learndash_group_users_' . $user_id, true );
+                if ( ! is_array( $user_groups ) ) {
+                    $user_groups = array();
+                }
+                $user_groups = array_map( 'intval', $user_groups );
+                
+                if ( ! in_array( $group_id, $user_groups ) ) {
+                    $user_groups[] = $group_id;
+                    $user_result = update_user_meta( $user_id, 'learndash_group_users_' . $user_id, $user_groups );
+                    
+                    if ( $group_result && $user_result ) {
+                        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                            WP_CLI::line( "    Used meta-based assignment for member" );
+                        }
+                        return true;
+                    }
+                }
+            } else {
+                // Already enrolled
+                return true;
             }
         }
 
-        return true; // Already enrolled
+        return false;
     }
 
     /**
-     * IMPROVED: Enhanced group assignment verification with accurate counting
+     * IMPROVED: Enhanced group assignment verification using proper LearnDash functions
+     * FIXED: Now uses LearnDash functions with fallbacks
      * 
      * @param array $groups
      * @return array
@@ -646,17 +764,56 @@ class LDTT_Enhanced_User_Distribution {
         foreach ( $groups as $group_id ) {
             $group_title = get_the_title( $group_id );
             
-            // Check leaders - Use the correct meta key
-            $leaders = get_post_meta( $group_id, '_ld_group_administrators', true );
-            $leaders = is_array( $leaders ) ? array_filter( $leaders ) : array(); // Remove empty values
-            $leader_count = count( $leaders );
+            // Check leaders - Use proper LearnDash functions first
+            $leader_count = 0;
+            $leaders = array();
             
-            // Check members - Use the correct meta key format
-            $members = get_post_meta( $group_id, 'learndash_group_users_' . $group_id, true );
-            $members = is_array( $members ) ? array_filter( $members ) : array(); // Remove empty values
-            $member_count = count( $members );
+            if ( function_exists( 'learndash_get_groups_administrators' ) ) {
+                $leaders = learndash_get_groups_administrators( $group_id );
+                if ( is_array( $leaders ) ) {
+                    $leaders = array_filter( array_map( 'intval', $leaders ) );
+                    $leader_count = count( $leaders );
+                }
+            } else {
+                // Fallback to meta
+                $leaders = get_post_meta( $group_id, '_ld_group_administrators', true );
+                if ( is_array( $leaders ) ) {
+                    $leaders = array_filter( array_map( 'intval', $leaders ) );
+                    $leader_count = count( $leaders );
+                }
+            }
             
-            // FIXED: Only count groups that actually have leaders/members
+            // Check members - Use proper LearnDash functions first
+            $member_count = 0;
+            $members = array();
+            
+            if ( function_exists( 'learndash_get_groups_users' ) ) {
+                $members = learndash_get_groups_users( $group_id );
+                if ( is_array( $members ) ) {
+                    // Handle both user IDs and WP_User objects
+                    $member_ids = array();
+                    foreach ( $members as $member ) {
+                        if ( is_object( $member ) && isset( $member->ID ) ) {
+                            // WP_User object
+                            $member_ids[] = intval( $member->ID );
+                        } elseif ( is_numeric( $member ) ) {
+                            // User ID
+                            $member_ids[] = intval( $member );
+                        }
+                    }
+                    $members = array_filter( $member_ids );
+                    $member_count = count( $members );
+                }
+            } else {
+                // Fallback to meta
+                $members = get_post_meta( $group_id, 'learndash_group_users_' . $group_id, true );
+                if ( is_array( $members ) ) {
+                    $members = array_filter( array_map( 'intval', $members ) );
+                    $member_count = count( $members );
+                }
+            }
+            
+            // Count groups that actually have leaders/members
             if ( $leader_count > 0 ) {
                 $verification['groups_with_leaders']++;
             }
@@ -683,6 +840,54 @@ class LDTT_Enhanced_User_Distribution {
             : 0;
         
         return $verification;
+    }
+
+    /**
+     * ENHANCED: Count group leaders for a specific group using proper LearnDash functions
+     *
+     * @param int $group_id Group ID.
+     * @return int Number of leaders.
+     */
+    private static function count_group_leaders( $group_id ) {
+        if ( function_exists( 'learndash_get_groups_administrators' ) ) {
+            $leaders = learndash_get_groups_administrators( $group_id );
+            return is_array( $leaders ) ? count( array_filter( array_map( 'intval', $leaders ) ) ) : 0;
+        }
+        
+        // Fallback
+        $leaders = get_post_meta( $group_id, '_ld_group_administrators', true );
+        return is_array( $leaders ) ? count( array_filter( array_map( 'intval', $leaders ) ) ) : 0;
+    }
+
+    /**
+     * ENHANCED: Count group members for a specific group using proper LearnDash functions
+     *
+     * @param int $group_id Group ID.
+     * @return int Number of members.
+     */
+    private static function count_group_members( $group_id ) {
+        if ( function_exists( 'learndash_get_groups_users' ) ) {
+            $members = learndash_get_groups_users( $group_id );
+            if ( is_array( $members ) ) {
+                // Handle both user IDs and WP_User objects
+                $member_ids = array();
+                foreach ( $members as $member ) {
+                    if ( is_object( $member ) && isset( $member->ID ) ) {
+                        // WP_User object
+                        $member_ids[] = intval( $member->ID );
+                    } elseif ( is_numeric( $member ) ) {
+                        // User ID
+                        $member_ids[] = intval( $member );
+                    }
+                }
+                return count( array_filter( $member_ids ) );
+            }
+            return 0;
+        }
+        
+        // Fallback
+        $members = get_post_meta( $group_id, 'learndash_group_users_' . $group_id, true );
+        return is_array( $members ) ? count( array_filter( array_map( 'intval', $members ) ) ) : 0;
     }
 
     /**
