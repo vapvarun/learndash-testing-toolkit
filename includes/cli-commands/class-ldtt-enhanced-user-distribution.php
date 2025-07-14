@@ -415,22 +415,24 @@ class LDTT_Enhanced_User_Distribution {
     }
 
     /**
-     * Add course progress using the correct LearnDash function and approach
+     * Add course progress using the correct LearnDash function and approach (UPDATED VERSION)
+     * Now includes 100% completion for some users with enhanced logic
      *
      * @param int $user_id
      * @param int $course_id
      * @param int $min_progress
      * @param int $max_progress
+     * @return array|false
      */
     private static function add_course_progress( $user_id, $course_id, $min_progress = 25, $max_progress = 85 ) {
         if ( ! function_exists( 'learndash_process_mark_complete' ) ) {
-            return;
+            return false;
         }
 
-        // Get lessons first
+        // Get lessons first using the correct function
         $lessons = learndash_course_get_lessons( $course_id );
         if ( empty( $lessons ) ) {
-            return;
+            return false;
         }
 
         $all_steps = array();
@@ -440,44 +442,89 @@ class LDTT_Enhanced_User_Distribution {
             $lesson_id = $lesson->ID;
             $all_steps[] = array( 'id' => $lesson_id, 'type' => 'lesson' );
             
-            // Get topics for this specific lesson - FIXED APPROACH
+            // Get topics for this specific lesson using the correct function  
             $topics = learndash_course_get_topics( $course_id, $lesson_id );
             if ( ! empty( $topics ) ) {
                 foreach ( $topics as $topic ) {
                     $all_steps[] = array( 'id' => $topic->ID, 'type' => 'topic' );
                 }
             }
+
+            // Get lesson quizzes
+            $lesson_quizzes = learndash_get_lesson_quiz_list( $lesson_id );
+            if ( ! empty( $lesson_quizzes ) ) {
+                foreach ( $lesson_quizzes as $quiz ) {
+                    if ( isset( $quiz['post'] ) && is_object( $quiz['post'] ) ) {
+                        $all_steps[] = array( 'id' => $quiz['post']->ID, 'type' => 'quiz' );
+                    }
+                }
+            }
         }
 
-        // Get quizzes
-        $quizzes = learndash_course_get_quizzes( $course_id );
-        if ( ! empty( $quizzes ) ) {
-            foreach ( $quizzes as $quiz ) {
+        // Get course quizzes
+        $course_quizzes = learndash_course_get_quizzes( $course_id );
+        if ( ! empty( $course_quizzes ) ) {
+            foreach ( $course_quizzes as $quiz ) {
                 $all_steps[] = array( 'id' => $quiz->ID, 'type' => 'quiz' );
             }
         }
 
         if ( empty( $all_steps ) ) {
-            return;
+            return false;
         }
 
-        // Calculate random percentage of steps to complete
+        // Enhanced completion rate calculation with configurable 100% possibility
         $total_steps = count( $all_steps );
-        $completion_rate = wp_rand( $min_progress, $max_progress );
+        
+        // Use global completion percentage if set, otherwise default to 20%
+        global $ldtt_completion_percentage;
+        $completion_chance = isset( $ldtt_completion_percentage ) ? $ldtt_completion_percentage : 20;
+        
+        // Determine if this user gets 100% completion
+        $completion_rate = wp_rand( 1, 100 ) <= $completion_chance ? 100 : wp_rand( $min_progress, $max_progress );
+        
+        // If max_progress is already 100, increase the chance to 30%
+        if ( $max_progress >= 95 && $completion_chance < 30 ) {
+            $completion_rate = wp_rand( 1, 100 ) <= 30 ? 100 : wp_rand( $min_progress, $max_progress );
+        }
+        
         $target = ceil( $total_steps * ( $completion_rate / 100 ) );
 
+        // Shuffle steps for realistic non-linear completion
+        shuffle( $all_steps );
+        $steps_to_complete = array_slice( $all_steps, 0, $target );
+
         $marked = 0;
-        foreach ( $all_steps as $step ) {
+        $current_time = time() - wp_rand( 86400, 2592000 ); // 1-30 days ago
+
+        foreach ( $steps_to_complete as $step ) {
             $step_id = $step['id'];
             
+            // Skip if already completed
             if ( learndash_is_item_complete( $user_id, $step_id ) ) {
                 continue;
             }
 
-            // Use the correct LearnDash function: learndash_process_mark_complete()
-            // Parameters: user_id, post_id, only_calculate, course_id, force
+            // Use the correct LearnDash function with proper parameters
             if ( learndash_process_mark_complete( $user_id, $step_id, false, $course_id, false ) ) {
                 $marked++;
+
+                // Add realistic timing
+                $current_time += wp_rand( 3600, 86400 ); // 1-24 hours between completions
+
+                // Create activity entry for tracking
+                $activity_args = array(
+                    'user_id'           => $user_id,
+                    'post_id'           => $step_id,
+                    'course_id'         => $course_id,
+                    'activity_type'     => $step['type'],
+                    'activity_action'   => 'insert',
+                    'activity_status'   => true,
+                    'activity_started'  => $current_time - wp_rand( 300, 3600 ),
+                    'activity_completed' => $current_time,
+                );
+
+                learndash_update_user_activity( $activity_args );
             }
 
             if ( $marked >= $target ) {
@@ -485,13 +532,302 @@ class LDTT_Enhanced_User_Distribution {
             }
         }
 
+        // If 100% completion, mark the course as completed
+        if ( $completion_rate >= 100 && function_exists( 'learndash_process_mark_complete' ) ) {
+            learndash_process_mark_complete( $user_id, $course_id, false, $course_id, false );
+            
+            // Add course completion activity
+            $course_activity_args = array(
+                'user_id'           => $user_id,
+                'post_id'           => $course_id,
+                'course_id'         => $course_id,
+                'activity_type'     => 'course',
+                'activity_action'   => 'insert',
+                'activity_status'   => true,
+                'activity_started'  => $current_time - wp_rand( 86400, 604800 ), // Started 1-7 days ago
+                'activity_completed' => $current_time,
+            );
+            learndash_update_user_activity( $course_activity_args );
+        }
+
         // Store progress metadata
         update_user_meta( $user_id, '_ldtt_progress_created', current_time( 'timestamp' ) );
         update_user_meta( $user_id, '_ldtt_progress_completion_rate', $completion_rate );
+        update_user_meta( $user_id, '_ldtt_progress_course_' . $course_id, array(
+            'completion_rate' => $completion_rate,
+            'items_completed' => $marked,
+            'total_items' => $total_steps,
+            'course_completed' => $completion_rate >= 100,
+            'created' => current_time( 'timestamp' ),
+        ) );
+
+        return array(
+            'completion_rate' => $completion_rate,
+            'items_completed' => $marked,
+            'total_items' => $total_steps,
+            'course_completed' => $completion_rate >= 100,
+        );
+    }
+
+    /**
+     * Assign progress to existing enrolled users (UPDATED VERSION)
+     * Enhanced with 100% completion tracking and better reporting
+     *
+     * @param array $args
+     * @param array $assoc_args
+     */
+    public static function assign_progress_to_enrolled( $args = array(), $assoc_args = array() ) {
+        // Check for admin input if no CLI arguments are provided
+        if ( empty( $args ) && empty( $assoc_args ) ) {
+            $assoc_args = array(
+                'course_id'             => isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : null,
+                'all_courses'           => isset( $_POST['all_courses'] ) ? true : false,
+                'user_percentage'       => isset( $_POST['user_percentage'] ) ? intval( $_POST['user_percentage'] ) : 100,
+                'min_progress'          => isset( $_POST['min_progress'] ) ? intval( $_POST['min_progress'] ) : 25,
+                'max_progress'          => isset( $_POST['max_progress'] ) ? intval( $_POST['max_progress'] ) : 85,
+                'completion_percentage' => isset( $_POST['completion_percentage'] ) ? intval( $_POST['completion_percentage'] ) : 20,
+            );
+        }
+
+        $course_id = ! empty( $assoc_args['course_id'] ) ? absint( $assoc_args['course_id'] ) : null;
+        $all_courses = isset( $assoc_args['all_courses'] ) && $assoc_args['all_courses'];
+        $user_percentage = LDTT_Helper::validate_positive_int( $assoc_args['user_percentage'] ?? 100, 1, 100 );
+        $min_progress = LDTT_Helper::validate_positive_int( $assoc_args['min_progress'] ?? 25, 0, 100 );
+        $max_progress = LDTT_Helper::validate_positive_int( $assoc_args['max_progress'] ?? 85, $min_progress, 100 );
+        $completion_percentage = LDTT_Helper::validate_positive_int( $assoc_args['completion_percentage'] ?? 20, 0, 100 );
+
+        if ( ! $all_courses && ! $course_id ) {
+            $message = 'Either --course_id or --all_courses must be specified.';
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        $courses_to_process = $all_courses ? self::get_available_courses() : array( $course_id );
+        
+        if ( empty( $courses_to_process ) ) {
+            $message = 'No courses found to process.';
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::error( $message );
+            }
+            return array( 'status' => 'error', 'message' => $message );
+        }
+
+        $total_users_processed = 0;
+        $total_courses_processed = 0;
+        $total_completed_courses = 0;
 
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::line( "  - Added {$completion_rate}% progress ({$marked}/{$total_steps} steps) for user {$user_id}" );
+            WP_CLI::line( "Processing " . count( $courses_to_process ) . " courses for progress assignment..." );
+            WP_CLI::line( "User percentage to process: {$user_percentage}%" );
+            WP_CLI::line( "Progress range: {$min_progress}% - {$max_progress}%" );
+            WP_CLI::line( "100% completion chance: {$completion_percentage}%" );
+            WP_CLI::line( "" );
         }
+
+        foreach ( $courses_to_process as $current_course_id ) {
+            $course_title = get_the_title( $current_course_id );
+            
+            // Skip if course doesn't exist
+            if ( ! $course_title || get_post_type( $current_course_id ) !== learndash_get_post_type_slug( 'course' ) ) {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::warning( "Skipping invalid course ID: {$current_course_id}" );
+                }
+                continue;
+            }
+
+            $enrolled_users = self::get_enrolled_users_for_course( $current_course_id );
+            
+            if ( empty( $enrolled_users ) ) {
+                if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                    WP_CLI::line( "No enrolled users found for course: {$course_title} (ID: {$current_course_id})" );
+                }
+                continue;
+            }
+
+            // Calculate how many users to process based on percentage
+            $users_to_process_count = round( count( $enrolled_users ) * ( $user_percentage / 100 ) );
+            $users_to_process = array_slice( $enrolled_users, 0, $users_to_process_count );
+            
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::line( "Course: {$course_title} (ID: {$current_course_id})" );
+                WP_CLI::line( "  Total enrolled users: " . count( $enrolled_users ) );
+                WP_CLI::line( "  Users to process ({$user_percentage}%): " . count( $users_to_process ) );
+            }
+            
+            $course_users_processed = 0;
+            $course_completed_count = 0;
+            
+            foreach ( $users_to_process as $user_id ) {
+                // Ensure we have a valid user ID
+                $user_id = absint( $user_id );
+                if ( ! $user_id ) {
+                    continue;
+                }
+
+                // Check if user exists
+                $user = get_user_by( 'ID', $user_id );
+                if ( ! $user ) {
+                    continue;
+                }
+
+                // Check if user already has LDTT progress for this course
+                $existing_progress = get_user_meta( $user_id, '_ldtt_progress_course_' . $current_course_id, true );
+                if ( $existing_progress ) {
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::line( "  - User {$user->user_login} (ID: {$user_id}) already has progress, skipping" );
+                    }
+                    continue;
+                }
+
+                $result = self::add_course_progress_with_completion( $user_id, $current_course_id, $min_progress, $max_progress, $completion_percentage );
+                
+                if ( $result ) {
+                    $course_users_processed++;
+                    $total_users_processed++;
+                    
+                    if ( $result['course_completed'] ) {
+                        $course_completed_count++;
+                        $total_completed_courses++;
+                    }
+                    
+                    $completion_icon = $result['course_completed'] ? '🏆' : '📈';
+                    
+                    if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                        WP_CLI::line( "  {$completion_icon} User {$user->user_login} (ID: {$user_id}): {$result['completion_rate']}% progress ({$result['items_completed']}/{$result['total_items']} items)" );
+                    }
+                }
+            }
+            
+            if ( $course_users_processed > 0 ) {
+                $total_courses_processed++;
+            }
+            
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::line( "  ✓ Processed {$course_users_processed} users in this course ({$course_completed_count} completed)" );
+                WP_CLI::line( "" );
+            }
+        }
+
+        $message = "Added progress to {$total_users_processed} enrolled users across {$total_courses_processed} courses. {$total_completed_courses} users completed their courses (100%).";
+        
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::success( $message );
+        }
+        
+        return array(
+            'status' => 'success',
+            'message' => $message,
+            'users_processed' => $total_users_processed,
+            'courses_processed' => $total_courses_processed,
+            'completed_courses' => $total_completed_courses,
+        );
+    }
+
+    /**
+     * Add course progress with controllable 100% completion rate
+     * This is a wrapper method that calls add_course_progress with custom completion logic
+     *
+     * @param int $user_id
+     * @param int $course_id
+     * @param int $min_progress
+     * @param int $max_progress
+     * @param int $completion_percentage Percentage chance for 100% completion
+     * @return array|false
+     */
+    private static function add_course_progress_with_completion( $user_id, $course_id, $min_progress = 25, $max_progress = 85, $completion_percentage = 20 ) {
+        // Store the original completion percentage globally for the add_course_progress method
+        global $ldtt_completion_percentage;
+        $ldtt_completion_percentage = $completion_percentage;
+        
+        return self::add_course_progress( $user_id, $course_id, $min_progress, $max_progress );
+    }
+
+    /**
+     * Get enrolled users for a course (UPDATED VERSION)
+     * Enhanced with multiple detection methods and better validation
+     *
+     * @param int $course_id
+     * @return array Array of user IDs
+     */
+    private static function get_enrolled_users_for_course( $course_id ) {
+        $user_ids = array();
+
+        // Method 1: Try LearnDash function first
+        if ( function_exists( 'learndash_get_users_for_course' ) ) {
+            $users = learndash_get_users_for_course( $course_id );
+            if ( is_array( $users ) && ! empty( $users ) ) {
+                foreach ( $users as $user ) {
+                    if ( is_object( $user ) && isset( $user->ID ) ) {
+                        $user_ids[] = intval( $user->ID );
+                    } elseif ( is_numeric( $user ) ) {
+                        $user_ids[] = intval( $user );
+                    }
+                }
+                return array_unique( $user_ids );
+            }
+        }
+
+        // Method 2: Check course access via user meta
+        global $wpdb;
+        $course_access_users = $wpdb->get_col( $wpdb->prepare( "
+            SELECT user_id 
+            FROM {$wpdb->usermeta} 
+            WHERE meta_key = %s
+            AND meta_value LIKE %s
+        ", 
+        'course_' . $course_id . '_access_from',
+        '%'
+        ) );
+
+        if ( ! empty( $course_access_users ) ) {
+            $user_ids = array_merge( $user_ids, array_map( 'intval', $course_access_users ) );
+        }
+
+        // Method 3: Check course progress meta
+        $progress_users = $wpdb->get_col( $wpdb->prepare( "
+            SELECT user_id 
+            FROM {$wpdb->usermeta} 
+            WHERE meta_key = %s
+        ", 
+        '_sfwd-course_progress'
+        ) );
+
+        foreach ( $progress_users as $user_id ) {
+            $progress_data = get_user_meta( $user_id, '_sfwd-course_progress', true );
+            if ( is_array( $progress_data ) && isset( $progress_data[ $course_id ] ) ) {
+                $user_ids[] = intval( $user_id );
+            }
+        }
+
+        // Method 4: Fallback - get users who have any course activity for this course
+        if ( empty( $user_ids ) ) {
+            $activity_users = $wpdb->get_col( $wpdb->prepare( "
+                SELECT DISTINCT user_id 
+                FROM {$wpdb->usermeta} 
+                WHERE meta_key LIKE %s
+                AND meta_value = %s
+            ", 
+            'course_%_access_from',
+            $course_id
+            ) );
+            
+            $user_ids = array_merge( $user_ids, array_map( 'intval', $activity_users ) );
+        }
+
+        // Remove duplicates and invalid IDs
+        $user_ids = array_unique( array_filter( $user_ids ) );
+        
+        // Verify users exist
+        $valid_user_ids = array();
+        foreach ( $user_ids as $user_id ) {
+            if ( get_user_by( 'ID', $user_id ) ) {
+                $valid_user_ids[] = $user_id;
+            }
+        }
+
+        return $valid_user_ids;
     }
 
     /**
@@ -629,74 +965,5 @@ class LDTT_Enhanced_User_Distribution {
         }
         $group_users[] = $user_id;
         return update_post_meta( $group_id, 'learndash_group_users_' . $group_id, $group_users );
-    }
-
-    /**
-     * Assign progress to existing enrolled users (simplified version)
-     *
-     * @param array $args
-     * @param array $assoc_args
-     */
-    public static function assign_progress_to_enrolled( $args = array(), $assoc_args = array() ) {
-        $course_id = ! empty( $assoc_args['course_id'] ) ? absint( $assoc_args['course_id'] ) : null;
-        $all_courses = isset( $assoc_args['all_courses'] ) && $assoc_args['all_courses'];
-
-        if ( ! $all_courses && ! $course_id ) {
-            $message = 'Either --course_id or --all_courses must be specified.';
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
-        }
-
-        $courses_to_process = $all_courses ? self::get_available_courses() : array( $course_id );
-        $total_users_processed = 0;
-
-        foreach ( $courses_to_process as $course_id ) {
-            $users = self::get_enrolled_users_for_course( $course_id );
-            
-            foreach ( $users as $user_id ) {
-                self::add_course_progress( $user_id, $course_id );
-                $total_users_processed++;
-            }
-        }
-
-        $message = "Added progress to {$total_users_processed} enrolled users.";
-        
-        if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::success( $message );
-        }
-        
-        return array(
-            'status' => 'success',
-            'message' => $message,
-            'users_processed' => $total_users_processed,
-        );
-    }
-
-    /**
-     * Get enrolled users for a course
-     *
-     * @param int $course_id
-     * @return array
-     */
-    private static function get_enrolled_users_for_course( $course_id ) {
-        if ( function_exists( 'learndash_get_users_for_course' ) ) {
-            return learndash_get_users_for_course( $course_id );
-        }
-
-        // Fallback: get users with course progress
-        global $wpdb;
-        $users = $wpdb->get_col( $wpdb->prepare( "
-            SELECT user_id 
-            FROM {$wpdb->usermeta} 
-            WHERE meta_key LIKE %s
-            AND meta_value LIKE %s
-        ", 
-        '%course%progress%',
-        '%' . $course_id . '%'
-        ) );
-        
-        return array_map( 'absint', $users );
     }
 }
