@@ -31,53 +31,6 @@ class LDTT_Enhanced_User_Distribution {
             );
         }
 
-    /**
-     * Show dry run preview
-     */
-    private static function show_dry_run_preview( $total_users, $group_leader_count, $group_member_count, $course_enrolled_count, $regular_user_count, $use_existing, $create_progress, $min_progress, $max_progress, $user_prefix, $assign_to_existing_groups ) {
-        if ( defined( 'WP_CLI' ) && WP_CLI ) {
-            WP_CLI::line( "=== DRY RUN PREVIEW ===" );
-            WP_CLI::line( "Total Users: {$total_users}" );
-            WP_CLI::line( "Method: " . ( $use_existing ? 'Use existing users' : 'Create new users' ) );
-            WP_CLI::line( "" );
-            WP_CLI::line( "Distribution:" );
-            WP_CLI::line( "- Group Leaders: {$group_leader_count}" );
-            WP_CLI::line( "- Group Members: {$group_member_count}" );
-            WP_CLI::line( "- Course Enrolled: {$course_enrolled_count}" );
-            WP_CLI::line( "- Regular Users: {$regular_user_count}" );
-            WP_CLI::line( "" );
-            if ( ! $use_existing ) {
-                WP_CLI::line( "Username format: {$user_prefix}_XXXXXXXX" );
-            }
-            if ( $create_progress ) {
-                WP_CLI::line( "Progress: Random between {$min_progress}% - {$max_progress}%" );
-            }
-            WP_CLI::line( "Groups: " . ( $assign_to_existing_groups ? 'Use existing groups' : 'Create new groups if needed' ) );
-            WP_CLI::line( "" );
-            WP_CLI::line( "Run without --dry_run to execute." );
-        }
-
-        return array(
-            'status' => 'success',
-            'message' => 'Dry run completed',
-            'preview' => array(
-                'total_users' => $total_users,
-                'distribution' => array(
-                    'group_leaders' => $group_leader_count,
-                    'group_members' => $group_member_count,
-                    'course_enrolled' => $course_enrolled_count,
-                    'regular_users' => $regular_user_count,
-                ),
-                'settings' => array(
-                    'use_existing' => $use_existing,
-                    'create_progress' => $create_progress,
-                    'progress_range' => "{$min_progress}%-{$max_progress}%",
-                    'user_prefix' => $user_prefix,
-                    'existing_groups' => $assign_to_existing_groups,
-                ),
-            ),
-        );
-
         $total_users = LDTT_Helper::validate_positive_int( $assoc_args['total_users'] ?? 100, 10, 1000 );
         $group_leader_percent = floatval( $assoc_args['group_leaders'] ?? 1.0 );
         $group_member_percent = floatval( $assoc_args['group_members'] ?? 2.0 );
@@ -146,6 +99,54 @@ class LDTT_Enhanced_User_Distribution {
             'status' => 'success', 
             'message' => $message, 
             'results' => $results
+        );
+    }
+
+    /**
+     * Show dry run preview
+     */
+    private static function show_dry_run_preview( $total_users, $group_leader_count, $group_member_count, $course_enrolled_count, $regular_user_count, $use_existing, $create_progress, $min_progress, $max_progress, $user_prefix, $assign_to_existing_groups ) {
+        if ( defined( 'WP_CLI' ) && WP_CLI ) {
+            WP_CLI::line( "=== DRY RUN PREVIEW ===" );
+            WP_CLI::line( "Total Users: {$total_users}" );
+            WP_CLI::line( "Method: " . ( $use_existing ? 'Use existing users' : 'Create new users' ) );
+            WP_CLI::line( "" );
+            WP_CLI::line( "Distribution:" );
+            WP_CLI::line( "- Group Leaders: {$group_leader_count}" );
+            WP_CLI::line( "- Group Members: {$group_member_count}" );
+            WP_CLI::line( "- Course Enrolled: {$course_enrolled_count}" );
+            WP_CLI::line( "- Regular Users: {$regular_user_count}" );
+            WP_CLI::line( "" );
+            if ( ! $use_existing ) {
+                WP_CLI::line( "Username format: {$user_prefix}_XXXXXXXX" );
+            }
+            if ( $create_progress ) {
+                WP_CLI::line( "Progress: Random between {$min_progress}% - {$max_progress}%" );
+            }
+            WP_CLI::line( "Groups: " . ( $assign_to_existing_groups ? 'Use existing groups' : 'Create new groups if needed' ) );
+            WP_CLI::line( "" );
+            WP_CLI::line( "Run without --dry_run to execute." );
+        }
+
+        return array(
+            'status' => 'success',
+            'message' => 'Dry run completed',
+            'preview' => array(
+                'total_users' => $total_users,
+                'distribution' => array(
+                    'group_leaders' => $group_leader_count,
+                    'group_members' => $group_member_count,
+                    'course_enrolled' => $course_enrolled_count,
+                    'regular_users' => $regular_user_count,
+                ),
+                'settings' => array(
+                    'use_existing' => $use_existing,
+                    'create_progress' => $create_progress,
+                    'progress_range' => "{$min_progress}%-{$max_progress}%",
+                    'user_prefix' => $user_prefix,
+                    'existing_groups' => $assign_to_existing_groups,
+                ),
+            ),
         );
     }
 
@@ -224,9 +225,12 @@ class LDTT_Enhanced_User_Distribution {
      *
      * @param int $count
      * @param bool $use_existing
+     * @param string $user_prefix
+     * @param bool $assign_to_existing_groups
+     * @param bool $verbose
      * @return array
      */
-    private static function create_group_members( $count, $use_existing = false ) {
+    private static function create_group_members( $count, $use_existing = false, $user_prefix = 'member', $assign_to_existing_groups = false, $verbose = false ) {
         $group_members = array();
         $groups = self::get_available_groups();
 
@@ -289,9 +293,13 @@ class LDTT_Enhanced_User_Distribution {
      * @param int $count
      * @param bool $create_progress
      * @param bool $use_existing
+     * @param string $user_prefix
+     * @param int $min_progress
+     * @param int $max_progress
+     * @param bool $verbose
      * @return array
      */
-    private static function create_course_enrolled_users( $count, $create_progress = false, $use_existing = false ) {
+    private static function create_course_enrolled_users( $count, $create_progress = false, $use_existing = false, $user_prefix = 'student', $min_progress = 25, $max_progress = 85, $verbose = false ) {
         $enrolled_users = array();
         $courses = self::get_available_courses();
 
@@ -313,7 +321,7 @@ class LDTT_Enhanced_User_Distribution {
                 
                 // Add progress if requested
                 if ( $create_progress ) {
-                    self::add_course_progress( $user_id, $course_id );
+                    self::add_course_progress( $user_id, $course_id, $min_progress, $max_progress );
                 }
                 
                 $enrolled_users[] = $user_id;
@@ -348,7 +356,7 @@ class LDTT_Enhanced_User_Distribution {
                 
                 // Add progress if requested
                 if ( $create_progress ) {
-                    self::add_course_progress( $user_id, $course_id );
+                    self::add_course_progress( $user_id, $course_id, $min_progress, $max_progress );
                 }
 
                 $enrolled_users[] = $user_id;
@@ -366,9 +374,11 @@ class LDTT_Enhanced_User_Distribution {
      * Create regular users
      *
      * @param int $count
+     * @param string $user_prefix
+     * @param bool $verbose
      * @return array
      */
-    private static function create_regular_users( $count ) {
+    private static function create_regular_users( $count, $user_prefix = 'testuser', $verbose = false ) {
         $users = array();
 
         for ( $i = 1; $i <= $count; $i++ ) {
@@ -409,8 +419,10 @@ class LDTT_Enhanced_User_Distribution {
      *
      * @param int $user_id
      * @param int $course_id
+     * @param int $min_progress
+     * @param int $max_progress
      */
-    private static function add_course_progress( $user_id, $course_id ) {
+    private static function add_course_progress( $user_id, $course_id, $min_progress = 25, $max_progress = 85 ) {
         if ( ! function_exists( 'learndash_process_mark_complete' ) ) {
             return;
         }
@@ -449,9 +461,9 @@ class LDTT_Enhanced_User_Distribution {
             return;
         }
 
-        // Calculate random percentage of steps to complete (25-85%)
+        // Calculate random percentage of steps to complete
         $total_steps = count( $all_steps );
-        $completion_rate = wp_rand( 25, 85 );
+        $completion_rate = wp_rand( $min_progress, $max_progress );
         $target = ceil( $total_steps * ( $completion_rate / 100 ) );
 
         $marked = 0;
@@ -496,6 +508,36 @@ class LDTT_Enhanced_User_Distribution {
         ) );
 
         return array_map( 'absint', $users );
+    }
+
+    /**
+     * Get available groups or ensure some exist
+     *
+     * @return array
+     */
+    private static function ensure_groups_exist() {
+        $groups = self::get_available_groups();
+        
+        if ( empty( $groups ) ) {
+            // Create a basic group
+            $admin_id = LDTT_Helper::get_admin_user_id();
+            $group_id = wp_insert_post( array(
+                'post_title'   => 'Test Group',
+                'post_type'    => learndash_get_post_type_slug( 'group' ),
+                'post_status'  => 'publish',
+                'post_content' => 'Test group created for user distribution',
+                'post_author'  => $admin_id,
+                'meta_input'   => array(
+                    '_ldtt_test_data' => true,
+                ),
+            ) );
+            
+            if ( ! is_wp_error( $group_id ) ) {
+                $groups = array( $group_id );
+            }
+        }
+        
+        return $groups;
     }
 
     /**
