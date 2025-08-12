@@ -41,7 +41,13 @@ class LDTT_Create_Questions {
      * @return array Array of created question IDs.
      */
     public static function create_questions_for_quiz( $quiz_id, $questions ) {
-        $admin_id = LDTT_Helper::get_admin_user_id();
+        // Get an author ID with fallback to current user
+        $admin_id = LDTT_Helper::get_author_id();
+        if ( ! $admin_id ) {
+            // This should never happen with the new helper, but just in case
+            $admin_id = 1;
+        }
+        
         $course_id = learndash_get_course_id( $quiz_id );
         $created_questions = array();
 

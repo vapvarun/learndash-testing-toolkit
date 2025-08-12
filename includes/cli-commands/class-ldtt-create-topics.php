@@ -13,19 +13,17 @@ class LDTT_Create_Topics {
 
         $topic_count = LDTT_Helper::validate_positive_int( $assoc_args['count'] ?? 20, 20, 1000 );
         $specific_lesson_id = ! empty( $assoc_args['lesson_id'] ) ? absint( $assoc_args['lesson_id'] ) : null;
-        $author_id = LDTT_Helper::get_admin_user_id();
+        
+        // Get an author ID with fallback to current user
+        $author_id = LDTT_Helper::get_author_id();
+        if ( ! $author_id ) {
+            // This should never happen with the new helper, but just in case
+            $author_id = 1;
+        }
 
         // Validate if the lesson exists if specified
         if ( $specific_lesson_id && get_post_type( $specific_lesson_id ) !== learndash_get_post_type_slug( 'lesson' ) ) {
             $message = "Lesson ID {$specific_lesson_id} is not a valid lesson.";
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
-        }
-
-        if ( ! $author_id ) {
-            $message = 'No admin users found to assign as author.';
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
                 WP_CLI::error( $message );
             }
@@ -44,9 +42,24 @@ class LDTT_Create_Topics {
 
         $titles = LDTT_Helper::get_random_lesson_titles( $topic_count );
         $created_topics = array();
+        $lesson_distribution = array();
 
         for ( $i = 0; $i < $topic_count; $i++ ) {
-            $lesson_id = $specific_lesson_id ? $specific_lesson_id : $lessons[ array_rand( $lessons ) ];
+            // Use round-robin distribution when no specific lesson is provided
+            if ( $specific_lesson_id ) {
+                $lesson_id = $specific_lesson_id;
+            } else {
+                // Distribute topics evenly across all lessons
+                $lesson_index = $i % count( $lessons );
+                $lesson_id = $lessons[ $lesson_index ];
+            }
+            
+            // Track distribution for reporting
+            if ( ! isset( $lesson_distribution[ $lesson_id ] ) ) {
+                $lesson_distribution[ $lesson_id ] = 0;
+            }
+            $lesson_distribution[ $lesson_id ]++;
+            
             $course_id = learndash_get_course_id( $lesson_id );
             $topic_title = isset( $titles[ $i ] ) ? trim( $titles[ $i ] ) : "Topic " . ( $i + 1 );
 
@@ -79,11 +92,25 @@ class LDTT_Create_Topics {
             $created_topics[] = $topic_id;
 
             if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::line( "Created topic: {$topic_title} (ID: {$topic_id})" );
+                $lesson_title = get_the_title( $lesson_id );
+                WP_CLI::line( "Created topic: {$topic_title} (ID: {$topic_id}) for lesson: {$lesson_title}" );
             }
         }
 
         $message = count( $created_topics ) . " topics created successfully.";
+        
+        // Add distribution information if topics were spread across lessons
+        if ( ! $specific_lesson_id && count( $lesson_distribution ) > 1 ) {
+            $message .= " Topics distributed across " . count( $lesson_distribution ) . " lessons.";
+            if ( defined( 'WP_CLI' ) && WP_CLI ) {
+                WP_CLI::line( "\nDistribution summary:" );
+                foreach ( $lesson_distribution as $lid => $count ) {
+                    $lesson_title = get_the_title( $lid );
+                    WP_CLI::line( "  - {$lesson_title} (ID: {$lid}): {$count} topics" );
+                }
+            }
+        }
+        
         if ( defined( 'WP_CLI' ) && WP_CLI ) {
             WP_CLI::success( $message );
         }
@@ -91,6 +118,7 @@ class LDTT_Create_Topics {
             'status' => 'success',
             'message' => $message,
             'topic_ids' => $created_topics,
+            'distribution' => $lesson_distribution,
         );
     }
 

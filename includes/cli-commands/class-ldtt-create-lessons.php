@@ -34,14 +34,12 @@ class LDTT_Create_Lessons {
         }
 
         $titles = LDTT_Helper::get_random_lesson_titles( $lesson_count );
-        $admin_user_id = LDTT_Helper::get_admin_user_id();
-
+        
+        // Get an author ID with fallback to current user
+        $admin_user_id = LDTT_Helper::get_author_id();
         if ( ! $admin_user_id ) {
-            $message = 'No admin users found to assign as author.';
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
+            // This should never happen with the new helper, but just in case
+            $admin_user_id = 1;
         }
 
         $created_lessons = array();

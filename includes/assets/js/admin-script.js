@@ -1,9 +1,27 @@
 jQuery(document).ready(function($) {
     'use strict';
 
+    // Debug: Check if elements exist
+    console.log('LDTT Admin Script Loaded');
+    console.log('Nav tabs found:', $('.nav-tab').length);
+    console.log('Tab content found:', $('.tab-content').length);
+
+    // Initialize tabs - show the first active tab
+    $('.tab-content').hide();
+    $('.nav-tab-active').each(function() {
+        var target = $(this).attr('href');
+        console.log('Active tab target:', target);
+        if (target) {
+            $(target).show();
+        }
+    });
+
     // Tab functionality
     $('.nav-tab').on('click', function(e) {
         e.preventDefault();
+        
+        console.log('Tab clicked:', $(this).text());
+        console.log('Target href:', $(this).attr('href'));
         
         // Remove active states
         $('.nav-tab').removeClass('nav-tab-active');
@@ -11,7 +29,11 @@ jQuery(document).ready(function($) {
         
         // Add active states
         $(this).addClass('nav-tab-active');
-        $($(this).attr('href')).show();
+        var target = $(this).attr('href');
+        if (target) {
+            $(target).show();
+            console.log('Showing target:', target);
+        }
     });
 
     // Form submission handling

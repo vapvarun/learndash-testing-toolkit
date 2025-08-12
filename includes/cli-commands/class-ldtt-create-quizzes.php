@@ -30,7 +30,13 @@ class LDTT_Create_Quizzes {
             return array( 'status' => 'error', 'message' => $message );
         }
 
-        $admin_id = LDTT_Helper::get_admin_user_id();
+        // Get an author ID with fallback to current user
+        $admin_id = LDTT_Helper::get_author_id();
+        if ( ! $admin_id ) {
+            // This should never happen with the new helper, but just in case
+            $admin_id = 1;
+        }
+        
         $created_quizzes = array();
 
         for ( $i = 0; $i < $quiz_count; $i++ ) {
@@ -82,7 +88,12 @@ class LDTT_Create_Quizzes {
     }
 
     private static function create_questions_for_quiz( $quiz_id, $count ) {
-        $admin_id = LDTT_Helper::get_admin_user_id();
+        // Get an author ID with fallback to current user
+        $admin_id = LDTT_Helper::get_author_id();
+        if ( ! $admin_id ) {
+            // This should never happen with the new helper, but just in case
+            $admin_id = 1;
+        }
         $course_id = learndash_get_course_id( $quiz_id );
 
         $sample_questions = array(

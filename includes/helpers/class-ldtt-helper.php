@@ -92,6 +92,37 @@ class LDTT_Helper {
 
         return ! empty( $admins ) ? $admins[0]->ID : false;
     }
+    
+    /**
+     * Get an author ID for content creation.
+     * Falls back to current user if no admin found.
+     *
+     * @return int Author user ID (current user, admin, or 1 as last resort)
+     */
+    public static function get_author_id() {
+        // First try to get current user (most reliable when running from admin)
+        $current_user_id = get_current_user_id();
+        
+        if ( $current_user_id > 0 ) {
+            return $current_user_id;
+        }
+        
+        // If no current user (e.g., running from CLI), try to get an admin
+        $admin_id = self::get_admin_user_id();
+        
+        if ( $admin_id ) {
+            return $admin_id;
+        }
+        
+        // Last resort - get any user
+        $users = get_users( array(
+            'number' => 1,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+        ) );
+        
+        return ! empty( $users ) ? $users[0]->ID : 1;
+    }
 
     /**
      * Get random course titles.

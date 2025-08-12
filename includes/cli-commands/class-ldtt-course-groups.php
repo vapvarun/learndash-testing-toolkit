@@ -108,10 +108,12 @@ class LDTT_Course_Groups {
      */
     private static function create_course_groups( $group_prefix, $group_count ) {
         $group_ids = array();
-        $admin_id = LDTT_Helper::get_admin_user_id();
-
+        
+        // Get an author ID with fallback to current user
+        $admin_id = LDTT_Helper::get_author_id();
         if ( ! $admin_id ) {
-            return new WP_Error( 'no_admin', 'No admin user found to assign as group author.' );
+            // This should never happen with the new helper, but just in case
+            $admin_id = 1;
         }
 
         for ( $i = 1; $i <= $group_count; $i++ ) {

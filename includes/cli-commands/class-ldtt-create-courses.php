@@ -26,14 +26,11 @@ class LDTT_Create_Courses {
         $total_courses = LDTT_Helper::validate_positive_int( $assoc_args['count'] ?? 5, 1, 100 );
         $specified_access_mode = ! empty( $assoc_args['access_mode'] ) ? sanitize_text_field( $assoc_args['access_mode'] ) : null;
 
-        // Get an admin user to assign as the author
-        $admin_user_id = LDTT_Helper::get_admin_user_id();
+        // Get an author ID with fallback to current user
+        $admin_user_id = LDTT_Helper::get_author_id();
         if ( ! $admin_user_id ) {
-            $message = 'No admin users found to assign as author.';
-            if ( defined( 'WP_CLI' ) && WP_CLI ) {
-                WP_CLI::error( $message );
-            }
-            return array( 'status' => 'error', 'message' => $message );
+            // This should never happen with the new helper, but just in case
+            $admin_user_id = 1;
         }
 
         // Create the courses
