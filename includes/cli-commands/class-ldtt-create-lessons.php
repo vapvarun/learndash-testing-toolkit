@@ -33,8 +33,6 @@ class LDTT_Create_Lessons {
             return array( 'status' => 'error', 'message' => $message );
         }
 
-        $titles = LDTT_Helper::get_random_lesson_titles( $lesson_count );
-        
         // Get an author ID with fallback to current user
         $admin_user_id = LDTT_Helper::get_author_id();
         if ( ! $admin_user_id ) {
@@ -46,7 +44,7 @@ class LDTT_Create_Lessons {
 
         for ( $i = 0; $i < $lesson_count; $i++ ) {
             $course_id = $specific_course_id ? $specific_course_id : $courses[ array_rand( $courses ) ];
-            $lesson_title = isset( $titles[ $i ] ) ? trim( $titles[ $i ] ) : "Lesson " . ( $i + 1 );
+            $lesson_title = LDTT_Sample_Data::get_random_lesson_title();
 
             if ( empty( $lesson_title ) ) {
                 continue;
@@ -57,7 +55,7 @@ class LDTT_Create_Lessons {
                 'post_type'    => learndash_get_post_type_slug( 'lesson' ),
                 'post_status'  => 'publish',
                 'post_author'  => $admin_user_id,
-                'post_content' => "This is a test lesson: {$lesson_title}",
+                'post_content' => LDTT_Sample_Data::get_random_lesson_content(),
                 'meta_input'   => array(
                     '_ldtt_test_data' => true,
                 ),

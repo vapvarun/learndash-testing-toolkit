@@ -143,6 +143,7 @@ class LDTT_Admin_Interface {
             <!-- Courses Tab -->
             <div id="courses" class="ldtt-tab-content <?php echo $current_tab === 'courses' ? 'active' : ''; ?>">
                 <h2><?php esc_html_e( 'Create Test Courses', 'learndash-testing-toolkit' ); ?></h2>
+                <p><?php esc_html_e( 'Generate professional courses with realistic titles like "Complete Web Development Bootcamp" and detailed descriptions from our curated dataset.', 'learndash-testing-toolkit' ); ?></p>
                 <form method="post" action="">
                     <?php wp_nonce_field( 'ldtt_action', 'ldtt_nonce' ); ?>
                     <input type="hidden" name="ldtt_action" value="create_courses">
@@ -191,6 +192,7 @@ class LDTT_Admin_Interface {
             <!-- Lessons Tab -->
             <div id="lessons" class="ldtt-tab-content <?php echo $current_tab === 'lessons' ? 'active' : ''; ?>">
                 <h2><?php esc_html_e( 'Create Test Lessons', 'learndash-testing-toolkit' ); ?></h2>
+                <p><?php esc_html_e( 'Create lessons with professional titles like "Introduction to Fundamentals" and "Advanced Techniques" with realistic content paragraphs.', 'learndash-testing-toolkit' ); ?></p>
                 <form method="post" action="">
                     <?php wp_nonce_field( 'ldtt_action', 'ldtt_nonce' ); ?>
                     <input type="hidden" name="ldtt_action" value="create_lessons">
@@ -222,6 +224,7 @@ class LDTT_Admin_Interface {
             <!-- Topics Tab -->
             <div id="topics" class="ldtt-tab-content <?php echo $current_tab === 'topics' ? 'active' : ''; ?>">
                 <h2><?php esc_html_e( 'Create Test Topics', 'learndash-testing-toolkit' ); ?></h2>
+                <p><?php esc_html_e( 'Generate topics with detailed titles like "Key Terminology and Definitions" and "Performance Optimization" with professional content.', 'learndash-testing-toolkit' ); ?></p>
                 <form method="post" action="">
                     <?php wp_nonce_field( 'ldtt_action', 'ldtt_nonce' ); ?>
                     <input type="hidden" name="ldtt_action" value="create_topics">
@@ -478,6 +481,7 @@ class LDTT_Admin_Interface {
                 
                 <div class="ldtt-section">
                     <h3><?php esc_html_e( 'Create Groups', 'learndash-testing-toolkit' ); ?></h3>
+                    <p><?php esc_html_e( 'Create LearnDash groups with realistic professional titles and descriptions from our curated dataset.', 'learndash-testing-toolkit' ); ?></p>
                     <form method="post" action="">
                         <?php wp_nonce_field( 'ldtt_action', 'ldtt_nonce' ); ?>
                         <input type="hidden" name="ldtt_action" value="create_groups">
@@ -1152,25 +1156,35 @@ class LDTT_Admin_Interface {
      * Create test groups
      */
     private function create_test_groups( $count, $courses_per_group = 0 ) {
-        // Get author ID with fallback to current user
-        $author_id = class_exists( 'LDTT_Helper' ) ? LDTT_Helper::get_author_id() : get_current_user_id();
-        if ( ! $author_id ) {
-            $author_id = 1; // Absolute fallback
-        }
-        
-        for ( $i = 1; $i <= $count; $i++ ) {
-            $group_data = array(
-                'post_title'   => sprintf( 'Test Group %d', time() + $i ),
-                'post_content' => 'This is test group content.',
-                'post_status'  => 'publish',
-                'post_type'    => 'groups',
-                'post_author'  => $author_id,
-            );
+        if ( class_exists( 'LDTT_Create_Groups' ) ) {
+            // Use the new realistic data approach
+            $result = LDTT_Create_Groups::handle( array(), array( 
+                'count' => $count,
+                'prefix' => 'Admin Created Group'
+            ) );
             
-            $group_id = wp_insert_post( $group_data );
+            return $result['status'] === 'success';
+        } else {
+            // Fallback to old method if new class doesn't exist
+            $author_id = class_exists( 'LDTT_Helper' ) ? LDTT_Helper::get_author_id() : get_current_user_id();
+            if ( ! $author_id ) {
+                $author_id = 1;
+            }
+            
+            for ( $i = 1; $i <= $count; $i++ ) {
+                $group_data = array(
+                    'post_title'   => sprintf( 'Test Group %d', time() + $i ),
+                    'post_content' => 'This is test group content.',
+                    'post_status'  => 'publish',
+                    'post_type'    => 'groups',
+                    'post_author'  => $author_id,
+                );
+                
+                wp_insert_post( $group_data );
+            }
+            
+            return true;
         }
-        
-        return true;
     }
     
     /**

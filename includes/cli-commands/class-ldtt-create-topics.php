@@ -40,7 +40,6 @@ class LDTT_Create_Topics {
             return array( 'status' => 'error', 'message' => $message );
         }
 
-        $titles = LDTT_Helper::get_random_lesson_titles( $topic_count );
         $created_topics = array();
         $lesson_distribution = array();
 
@@ -61,7 +60,7 @@ class LDTT_Create_Topics {
             $lesson_distribution[ $lesson_id ]++;
             
             $course_id = learndash_get_course_id( $lesson_id );
-            $topic_title = isset( $titles[ $i ] ) ? trim( $titles[ $i ] ) : "Topic " . ( $i + 1 );
+            $topic_title = LDTT_Sample_Data::get_random_topic_title();
 
             if ( empty( $topic_title ) ) {
                 continue;
@@ -72,7 +71,7 @@ class LDTT_Create_Topics {
                 'post_type'    => learndash_get_post_type_slug( 'topic' ),
                 'post_status'  => 'publish',
                 'post_author'  => $author_id,
-                'post_content' => "This is a test topic: {$topic_title}",
+                'post_content' => LDTT_Sample_Data::get_random_topic_content(),
                 'meta_input'   => array(
                     '_ldtt_test_data' => true,
                 ),

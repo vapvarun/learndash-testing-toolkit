@@ -16,25 +16,45 @@ This directory contains comprehensive JSON datasets for creating realistic Learn
 
 ## Usage Examples
 
-### PHP Implementation
+### WP-CLI Commands (✅ INTEGRATED)
+
+```bash
+# Create courses with realistic data
+wp ldtt create-courses --count=5 --prefix="Demo Course"
+
+# Create lessons with professional titles and content
+wp ldtt create-lessons --count=10
+
+# Create topics with detailed titles and descriptions  
+wp ldtt create-topics --count=20
+
+# Create groups with realistic community names
+wp ldtt create-groups --count=5 --prefix="Learning Group"
+```
+
+### PHP Implementation (✅ INTEGRATED)
+
+```php
+// Direct access to realistic data
+$course_title = LDTT_Sample_Data::get_random_course_title();
+$course_description = LDTT_Sample_Data::get_random_course_description();
+$lesson_title = LDTT_Sample_Data::get_random_lesson_title();
+$lesson_content = LDTT_Sample_Data::get_random_lesson_content();
+$topic_title = LDTT_Sample_Data::get_random_topic_title();
+$topic_content = LDTT_Sample_Data::get_random_topic_content();
+$group_title = LDTT_Sample_Data::get_random_group_title();
+$group_description = LDTT_Sample_Data::get_random_group_description();
+```
+
+### Legacy JSON Access (if needed)
 
 ```php
 // Load the main dataset
 $data = json_decode(file_get_contents(__DIR__ . '/data/learndash-sample-data.json'), true);
 
-// Create course with random data
+// Access data arrays
 $course_titles = $data['courses']['titles'];
 $course_descriptions = $data['courses']['descriptions'];
-
-$random_title = $course_titles[array_rand($course_titles)];
-$random_description = $course_descriptions[array_rand($course_descriptions)];
-
-// Create lesson with random content
-$lesson_titles = $data['lessons']['titles'];
-$lesson_content = $data['lessons']['content'];
-
-$random_lesson_title = $lesson_titles[array_rand($lesson_titles)];
-$random_lesson_content = $lesson_content[array_rand($lesson_content)];
 ```
 
 ### WP-CLI Integration

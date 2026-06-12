@@ -85,13 +85,12 @@ class LDTT_Create_Courses {
         }
 
         // Get random course titles for variety
-        $course_titles = LDTT_Helper::get_random_course_titles( $course_count );
         $current_mode_index = 0;
 
         for ( $i = 1; $i <= $course_count; $i++ ) {
-            $base_title = isset( $course_titles[ $i - 1 ] ) ? $course_titles[ $i - 1 ] : "Course {$i}";
+            $base_title = LDTT_Sample_Data::get_random_course_title();
             $course_title = "{$course_prefix} {$i}: {$base_title}";
-            $course_content = self::generate_course_content( $course_title, $i );
+            $course_content = LDTT_Sample_Data::get_random_course_description();
 
             // Determine access mode for this course
             $access_mode = $specified_access_mode ?: array_keys( $access_modes )[ $current_mode_index ];

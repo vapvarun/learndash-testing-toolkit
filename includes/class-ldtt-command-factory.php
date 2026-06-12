@@ -58,6 +58,12 @@ class LDTT_Command_Factory {
                 'title' => 'Create Questions',
                 'description' => 'Create quiz questions and assign to quizzes',
             ),
+            'create-groups' => array(
+                'class' => 'LDTT_Create_Groups',
+                'file'  => 'class-ldtt-create-groups.php',
+                'title' => 'Create Groups',
+                'description' => 'Create multiple LearnDash groups with realistic data',
+            ),
             'enrollment' => array(
                 'class' => 'LDTT_Enrollment',
                 'file'  => 'class-ldtt-enrollment.php',
